@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    ".cache/",
+    "src/generated/",
+    "package-lock.json",
+    // Prose stays hand-formatted; reflowing would rewrap README tables and ADR wording.
+    "docs/",
+    "*.md",
+  ],
+}

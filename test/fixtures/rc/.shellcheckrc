@@ -1,0 +1,2 @@
+# Found by the upward walk from rc/child and rc/child/nested; rc/nearest shadows it.
+disable=SC2086
