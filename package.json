@@ -24,7 +24,10 @@
       "default": "./dist/node.js"
     },
     "./shellcheck.wasm": "./dist/shellcheck.wasm",
-    "./build-info.json": "./dist/build-info.json",
+    "./build-info": {
+      "types": "./dist/build-info.d.ts",
+      "default": "./dist/build-info.js"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
