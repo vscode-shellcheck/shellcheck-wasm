@@ -38,7 +38,7 @@ jobs:
             echo "ghc_wasm_meta_commit=$(cat buildtools/wasm/ghc-wasm-meta.txt)"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - uses: docker/build-push-action@v6
         with:
@@ -55,7 +55,7 @@ jobs:
 
       - run: cat dist/build-info.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: shellcheck-wasm
           path: dist/
@@ -72,7 +72,7 @@ jobs:
           name: shellcheck-wasm
           path: dist
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
@@ -110,7 +110,7 @@ jobs:
           name: shellcheck-wasm
           path: dist
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
