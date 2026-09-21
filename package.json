@@ -1,6 +1,6 @@
 {
   "name": "@vscode-shellcheck/shellcheck-wasm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ShellCheck compiled to WebAssembly (WASI command module) with a minimal runner",
   "license": "GPL-3.0-or-later",
   "repository": {
