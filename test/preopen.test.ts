@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { wasi } from "@bjorn3/browser_wasi_shim";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createReadOnlyPreopen, run, type ReadOnlyPreopen } from "../src/node.js";
 import {
   codesOf,
@@ -218,6 +218,20 @@ describe("createReadOnlyPreopen", () => {
     expect(openFdCount()).toBe(before);
     expect(second.fd_obj!.fd_read(1).ret).toBe(wasi.ERRNO_BADF);
     preopen.dispose();
+    expect(openFdCount()).toBe(before);
+  });
+
+  it.skipIf(!onLinux)("closes the host descriptor when fstat fails after open", () => {
+    const preopen = track(createReadOnlyPreopen(rcRoot));
+    const before = openFdCount();
+    const fstat = vi.spyOn(fs, "fstatSync").mockImplementationOnce(() => {
+      throw Object.assign(new Error("injected"), { code: "EIO" });
+    });
+    try {
+      expect(openFile(preopen, "child/lib.sh").ret).toBe(wasi.ERRNO_IO);
+    } finally {
+      fstat.mockRestore();
+    }
     expect(openFdCount()).toBe(before);
   });
 
