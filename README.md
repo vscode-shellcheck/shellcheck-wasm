@@ -47,13 +47,13 @@ process writes to while ShellCheck runs.
 
 ## Entry points
 
-| Subpath             | Provides                                                                            |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `.`                 | `run`, `wasmUrl`, `SHELLCHECK_VERSION`, `RunOptions`, `RunResult`; no Node imports  |
-| `./node`            | The above plus `loadModule`, `createReadOnlyPreopen`, `wasmPath`, `ReadOnlyPreopen` |
-| `./shellcheck.wasm` | The compiled ShellCheck module                                                      |
-| `./build-info.json` | Toolchain and feature metadata for the bundled module                               |
-| `./package.json`    | The package manifest                                                                |
+| Subpath             | Provides                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `.`                 | `run`, `wasmUrl`, `SHELLCHECK_VERSION`, `RunOptions`, `RunResult`; no Node imports                                |
+| `./node`            | The above plus `loadModule`, `createReadOnlyPreopen`, `readBuildInfo`, `wasmPath`, `ReadOnlyPreopen`, `BuildInfo` |
+| `./build-info`      | `readBuildInfo`, `BuildInfo`: toolchain and feature metadata for the bundled module, without the runner           |
+| `./shellcheck.wasm` | The compiled ShellCheck module                                                                                    |
+| `./package.json`    | The package manifest                                                                                              |
 
 Bundlers that relocate modules can copy the artifact from
 `require.resolve("@vscode-shellcheck/shellcheck-wasm/shellcheck.wasm")` and pass their own
@@ -62,7 +62,7 @@ Bundlers that relocate modules can copy the artifact from
 ## Versioning
 
 The package follows its own semver, independent of the bundled ShellCheck release exposed as
-`SHELLCHECK_VERSION`; `build-info.json` describes the build that produced the artifact.
+`SHELLCHECK_VERSION`; `readBuildInfo()` describes the build that produced the artifact.
 
 ## License
 

@@ -1,4 +1,4 @@
-FROM debian:13-slim AS toolchain
+FROM debian:13-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS toolchain
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # GHC-built tools abort on non-ASCII output in the POSIX locale.
 ENV LANG=C.UTF-8
