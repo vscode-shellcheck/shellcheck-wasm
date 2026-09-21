@@ -1,0 +1,2 @@
+# The nearest rc wins, so SC2086 stays enabled here.
+disable=SC2034
