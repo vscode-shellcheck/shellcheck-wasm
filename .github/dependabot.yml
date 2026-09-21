@@ -9,6 +9,11 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
 
+  - package-ecosystem: docker
+    directory: /buildtools/wasm
+    schedule:
+      interval: weekly
+
   - package-ecosystem: npm
     directory: /
     schedule:
