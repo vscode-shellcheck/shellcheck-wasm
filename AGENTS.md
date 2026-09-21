@@ -76,3 +76,13 @@ with `github.token` get no CI run; set the `BUMP_PR_TOKEN` secret (PAT or App to
 - Add an ADR only for a decision that is hard to reverse, surprising to a newcomer, and a real
   trade-off.
 - `oxfmt` ignores `*.md` and `docs/`; prose is not auto-formatted.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for this repository, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+This repository uses a single-context layout with a root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
