@@ -13,9 +13,9 @@ export const hasWasm: boolean = existsSync(wasmPath);
 export const hasNative: boolean = existsSync(nativePath);
 export const hasBuildInfo: boolean = existsSync(buildInfoPath);
 
-export const wasmHint = `dist/shellcheck.wasm is missing; run \`npm run build:wasm\` or \`npm run fetch:wasm\` (see AGENTS.md for the dev stand-in)`;
+export const wasmHint = `dist/shellcheck.wasm is missing; run \`npm run build:wasm\` (Docker) or use the dev stand-in from AGENTS.md`;
 export const nativeHint = `${nativePath} is missing; run \`npm run fetch:native\` or set SHELLCHECK_NATIVE`;
-export const buildInfoHint = `dist/build-info.json is missing; it is produced by \`npm run build:wasm\` (Docker) or \`npm run fetch:wasm\``;
+export const buildInfoHint = `dist/build-info.json is missing; it is produced by \`npm run build:wasm\` (Docker) or downloaded from a GitHub Release`;
 
 const printedHints = new Set<string>();
 

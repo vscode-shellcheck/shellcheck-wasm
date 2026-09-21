@@ -52,10 +52,9 @@ buildtools/wasm/
   ghc-wasm-meta.txt            ghc-wasm-meta commit SHA
   cabal.project                cabal config copied into the ShellCheck source tree
   check-target-features.py     tail-call gate + prints features as JSON
-  write-build-info.sh          produces build-info.json inside the image
+  build.sh                     every build step after the sources are unpacked (amendment 2026-09-21: replaces write-build-info.sh)
 scripts/
   build-wasm.sh                docker build → dist/{shellcheck.wasm,shellcheck.wasm.sha256,build-info.json}
-  fetch-release-wasm.mjs       download the same three files from the latest GitHub Release into dist/ (CI fast path)
   fetch-native-shellcheck.sh   download native ShellCheck for version.txt into .cache/native/shellcheck (parity tests)
   gen-version.mjs              version.txt → src/generated/version.ts (gitignored)
 src/
@@ -160,6 +159,8 @@ Honors `DOCKER=podman` override. Prints the resulting `build-info.json`.
 
 ### A4. `scripts/fetch-release-wasm.mjs`
 
+Amendment 2026-09-21: fetch-release fast path removed; CI always builds. This script no longer exists.
+
 Node ESM, no deps. Uses `GITHUB_TOKEN` if present. Finds the latest GitHub
 Release of this repo (`GITHUB_REPOSITORY` env or `vscode-shellcheck/shellcheck-wasm`),
 downloads `shellcheck.wasm`, `shellcheck.wasm.sha256`, `build-info.json` into
@@ -173,6 +174,8 @@ Downloads `https://github.com/koalaman/shellcheck/releases/download/<tag>/shellc
 `.cache/native/shellcheck`, idempotent. Prints the path.
 
 ### A6. Workflows
+
+Amendment 2026-09-21: fetch-release fast path removed; CI always builds. `ci.yml` has no `plan` or `fetch-wasm` job; `test` needs `build-wasm`.
 
 `ci.yml` — on `pull_request` and `push` to `main`:
 1. `plan` job: `dorny/paths-filter` on `buildtools/**`, `.github/workflows/ci.yml`; plus `gh release view --json tagName` to detect whether any release exists. Output `build=true|false`.

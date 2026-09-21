@@ -31,7 +31,6 @@
     "gen:version": "node scripts/gen-version.mjs",
     "build": "npm run gen:version && tsc -p tsconfig.build.json",
     "build:wasm": "scripts/build-wasm.sh",
-    "fetch:wasm": "node scripts/fetch-release-wasm.mjs",
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
     "lint": "oxlint",
     "fmt": "oxfmt",
