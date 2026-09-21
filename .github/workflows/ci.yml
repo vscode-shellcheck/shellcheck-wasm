@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            wasm:
+              - 'buildtools/**'
+              - '.github/workflows/ci.yml'
+
+      - name: Check whether a release exists
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide whether to build the artifact
+        id: decide
+        env:
+          WASM_CHANGED: ${{ steps.changes.outputs.wasm }}
+          RELEASE_EXISTS: ${{ steps.release.outputs.exists }}
+        run: |
+          if [ "$WASM_CHANGED" = "true" ] || [ "$RELEASE_EXISTS" != "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-wasm:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pins
+        id: pins
+        run: |
+          {
+            echo "shellcheck_version=$(cat buildtools/wasm/version.txt)"
+            echo "shellcheck_src_sha256=$(cat buildtools/wasm/shellcheck-src.sha256)"
+            echo "ghc_wasm_meta_commit=$(cat buildtools/wasm/ghc-wasm-meta.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: buildtools/wasm
+          file: buildtools/wasm/Dockerfile
+          target: artifact
+          outputs: type=local,dest=dist
+          build-args: |
+            SHELLCHECK_VERSION=${{ steps.pins.outputs.shellcheck_version }}
+            SHELLCHECK_SRC_SHA256=${{ steps.pins.outputs.shellcheck_src_sha256 }}
+            GHC_WASM_META_COMMIT=${{ steps.pins.outputs.ghc_wasm_meta_commit }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - run: cat dist/build-info.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shellcheck-wasm
+          path: dist/
+          if-no-files-found: error
+
+  fetch-wasm:
+    needs: plan
+    if: needs.plan.outputs.build != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: node scripts/fetch-release-wasm.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shellcheck-wasm
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    needs: [plan, build-wasm, fetch-wasm]
+    # Exactly one of build-wasm / fetch-wasm runs; the other is skipped, which would
+    # otherwise skip this job too.
+    if: ${{ !cancelled() && (needs.build-wasm.result == 'success' || needs.fetch-wasm.result == 'success') }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shellcheck-wasm
+          path: dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+      - run: bash scripts/fetch-native-shellcheck.sh
+      - run: npm run build
+      - run: npm run lint
+      - run: npm run fmt:check
+      - run: npm test
+
+      - name: Check the packed tarball contains the artifact
+        run: |
+          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+          node -e '
+            const [pkg] = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+            const paths = pkg.files.map((f) => f.path);
+            if (!paths.includes("dist/shellcheck.wasm")) {
+              console.error("dist/shellcheck.wasm is not in the tarball:", paths);
+              process.exit(1);
+            }
+          ' "$RUNNER_TEMP/pack.json"

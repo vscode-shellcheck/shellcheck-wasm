@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check package.json version matches the tag
+        run: |
+          pkg_version="$(node -p "require('./package.json').version")"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$pkg_version" != "$tag_version" ]; then
+            echo "::error::package.json version $pkg_version does not match tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+  build-wasm:
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pins
+        id: pins
+        run: |
+          {
+            echo "shellcheck_version=$(cat buildtools/wasm/version.txt)"
+            echo "shellcheck_src_sha256=$(cat buildtools/wasm/shellcheck-src.sha256)"
+            echo "ghc_wasm_meta_commit=$(cat buildtools/wasm/ghc-wasm-meta.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: buildtools/wasm
+          file: buildtools/wasm/Dockerfile
+          target: artifact
+          outputs: type=local,dest=dist
+          build-args: |
+            SHELLCHECK_VERSION=${{ steps.pins.outputs.shellcheck_version }}
+            SHELLCHECK_SRC_SHA256=${{ steps.pins.outputs.shellcheck_src_sha256 }}
+            GHC_WASM_META_COMMIT=${{ steps.pins.outputs.ghc_wasm_meta_commit }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - run: cat dist/build-info.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shellcheck-wasm
+          path: dist/
+          if-no-files-found: error
+
+  test:
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shellcheck-wasm
+          path: dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: bash scripts/fetch-native-shellcheck.sh
+      - run: npm run build
+      - run: npm run lint
+      - run: npm run fmt:check
+      - run: npm test
+
+      - name: Check the packed tarball contains the artifact
+        run: |
+          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+          node -e '
+            const [pkg] = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+            const paths = pkg.files.map((f) => f.path);
+            if (!paths.includes("dist/shellcheck.wasm")) {
+              console.error("dist/shellcheck.wasm is not in the tarball:", paths);
+              process.exit(1);
+            }
+          ' "$RUNNER_TEMP/pack.json"
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: shellcheck-wasm
+          path: dist
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm run build
+
+      # Trusted Publishing: npm exchanges the job's OIDC token for publish rights, so no
+      # NODE_AUTH_TOKEN is set anywhere in this workflow.
+      - run: npm publish --provenance --access public
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/shellcheck.wasm dist/shellcheck.wasm.sha256 dist/build-info.json \
+            --verify-tag --generate-notes
