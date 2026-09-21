@@ -45,7 +45,7 @@
     "@bjorn3/browser_wasi_shim": "^0.4.2"
   },
   "devDependencies": {
-    "@types/node": "^22.20.4",
+    "@types/node": "^26.6.1",
     "oxfmt": "^0.68.0",
     "oxlint": "^1.83.0",
     "typescript": "^7.0.2",
