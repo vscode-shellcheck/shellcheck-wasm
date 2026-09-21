@@ -1,0 +1,7 @@
+packages: .
+optimization: 2
+index-state: hackage.haskell.org 2026-09-20T00:00:00Z
+-- ShellCheck 0.11 bounds predate GHC 9.14; allow newer boot libraries.
+allow-newer: ShellCheck:*
+package ShellCheck
+  ghc-options: -rtsopts
