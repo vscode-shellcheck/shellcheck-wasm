@@ -36,6 +36,8 @@ jobs:
           file: buildtools/wasm/Dockerfile
           target: artifact
           outputs: type=local,dest=dist
+          # buildx would otherwise drop a SLSA provenance.json into dist/, which ships in the npm package
+          provenance: false
           build-args: |
             SHELLCHECK_VERSION=${{ steps.pins.outputs.shellcheck_version }}
             SHELLCHECK_SRC_SHA256=${{ steps.pins.outputs.shellcheck_src_sha256 }}
