@@ -52,8 +52,8 @@ Bumping `buildtools/wasm/ghc-wasm-meta.txt` means revisiting, in the same PR:
 
 - `WASM_CFLAGS` in the Dockerfile against ghc-wasm-meta's current defaults (keep `-mtail-call`).
 - `index-state` in `buildtools/wasm/cabal.project`.
-- The pre-seeded `fgl` tarball version in the Dockerfile: it must equal what the solver picks at
-  that `index-state`. The pre-seed exists because Hackage's CDN returns 403 to cabal's download.
+- The pre-seeded `fgl` tarball version and sha256 in `build.sh`: the version must equal what the
+  solver picks at that `index-state`. The pre-seed exists because Hackage's CDN returns 403 to cabal's download.
 
 The Dockerfile is validated by review and by `ci.yml`, which builds the artifact on every run
 (Docker layer cache via `type=gha`).

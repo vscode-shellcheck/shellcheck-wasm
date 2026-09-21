@@ -124,11 +124,21 @@ class PreopenRoot {
   openFile(hostPath: string): OpenResult {
     if (this.openFiles.size >= MAX_OPEN_FILES) return { ret: wasi.ERRNO_NFILE, fd_obj: null };
     let fd: number;
-    let stats: fs.BigIntStats;
     try {
       fd = fs.openSync(hostPath, fs.constants.O_RDONLY);
+    } catch (error) {
+      return { ret: errnoOf(error), fd_obj: null };
+    }
+    let stats: fs.BigIntStats;
+    try {
       stats = fs.fstatSync(fd, { bigint: true });
     } catch (error) {
+      // Not in openFiles yet, so dispose() could never reclaim it.
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // The fstat errno is the one the guest needs.
+      }
       return { ret: errnoOf(error), fd_obj: null };
     }
     const file = new HostFile(this, fd, filetypeOf(stats));

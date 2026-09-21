@@ -14,12 +14,15 @@ ghc_wasm="${GHC_WASM_PREFIX:-/root/.ghc-wasm}"
 mkdir -p "$out"
 
 # Hackage's CDN answers cabal's own download of this tarball with 403; pre-seed the cache.
-# The version must equal what the solver picks at cabal.project's index-state.
+# The version must equal what the solver picks at cabal.project's index-state; the hash pins
+# the content cabal would otherwise have verified itself.
 fgl_version=5.8.3.1
+fgl_sha256=02f71384d3f286f8473a58c55ed3ca040f4d142ca4badf5c024ab077bc40362f
 fgl_dir="$ghc_wasm/.cabal/packages/hackage.haskell.org/fgl/$fgl_version"
 mkdir -p "$fgl_dir"
 curl -fL --retry 5 -o "$fgl_dir/fgl-$fgl_version.tar.gz" \
   "https://hackage.haskell.org/package/fgl-$fgl_version/fgl-$fgl_version.tar.gz"
+echo "$fgl_sha256  $fgl_dir/fgl-$fgl_version.tar.gz" | sha256sum -c -
 
 wasm32-wasi-cabal update
 wasm32-wasi-cabal build exe:shellcheck
