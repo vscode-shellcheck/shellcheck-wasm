@@ -7,7 +7,8 @@ never committed. Vocabulary: `CONTEXT.md` (use its terms). Decisions: `docs/adr/
 ## Layout
 
 - `buildtools/wasm/` — everything the Docker build reads: `Dockerfile`, pins (`version.txt`,
-  `shellcheck-src.sha256`, `ghc-wasm-meta.txt`), `cabal.project`, the tail-call gate script.
+  `shellcheck-src.sha256`, `ghc-wasm-meta.txt`), `cabal.project`, `build.sh` (every step after
+  the sources are unpacked), the tail-call gate script.
 - `src/generated/` — written by `npm run build` from `buildtools/wasm/version.txt`; gitignored.
 - `dist/` — compiled JS plus `shellcheck.wasm`, `shellcheck.wasm.sha256`, `build-info.json`; gitignored.
 - `.cache/native/` — native ShellCheck for the parity suite; gitignored.
@@ -18,9 +19,9 @@ Scripts are defined in `package.json`; there is no Docker on the dev machine, so
 is CI-only.
 
 1. `npm ci`
-2. Get an artifact into `dist/`. Once a GitHub Release exists: `npm run fetch:wasm`. Until then
-   the dev stand-in is the upstream 0.11.0 command module (no tail calls, fine for runner and
-   parity tests, never for a release):
+2. Get an artifact into `dist/`: download `shellcheck.wasm` and `build-info.json` from a GitHub
+   Release, or use the dev stand-in, the upstream 0.11.0 command module (no tail calls, fine for
+   runner and parity tests, never for a release):
    `mkdir -p dist && curl -fL -o dist/shellcheck.wasm https://raw.githubusercontent.com/wasilibs/go-shellcheck/24025c1590296bcce8e494624e8c3561740a32a4/internal/wasm/shellcheck.wasm`
 3. `npm run fetch:native`
 4. `npm run build && npm run lint && npm run fmt:check && npm test`
@@ -54,7 +55,8 @@ Bumping `buildtools/wasm/ghc-wasm-meta.txt` means revisiting, in the same PR:
 - The pre-seeded `fgl` tarball version in the Dockerfile: it must equal what the solver picks at
   that `index-state`. The pre-seed exists because Hackage's CDN returns 403 to cabal's download.
 
-The Dockerfile is validated by review and by `ci.yml` (a `buildtools/**` change forces a build).
+The Dockerfile is validated by review and by `ci.yml`, which builds the artifact on every run
+(Docker layer cache via `type=gha`).
 
 ## Releasing
 
