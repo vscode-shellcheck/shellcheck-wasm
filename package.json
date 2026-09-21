@@ -1,0 +1,55 @@
+{
+  "name": "@vscode-shellcheck/shellcheck-wasm",
+  "version": "0.1.0",
+  "description": "ShellCheck compiled to WebAssembly (WASI command module) with a minimal runner",
+  "license": "GPL-3.0-or-later",
+  "repository": "github:vscode-shellcheck/shellcheck-wasm",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./shellcheck.wasm": "./dist/shellcheck.wasm",
+    "./build-info.json": "./dist/build-info.json",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "gen:version": "node scripts/gen-version.mjs",
+    "build": "npm run gen:version && tsc -p tsconfig.build.json",
+    "build:wasm": "scripts/build-wasm.sh",
+    "fetch:wasm": "node scripts/fetch-release-wasm.mjs",
+    "fetch:native": "scripts/fetch-native-shellcheck.sh",
+    "lint": "oxlint",
+    "fmt": "oxfmt",
+    "fmt:check": "oxfmt --check",
+    "test": "vitest run",
+    "prepack": "node -e \"require('node:fs').accessSync('dist/shellcheck.wasm')\""
+  },
+  "dependencies": {
+    "@bjorn3/browser_wasi_shim": "^0.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
