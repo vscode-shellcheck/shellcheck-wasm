@@ -3,11 +3,11 @@
   "plugins": ["typescript", "unicorn"],
   "categories": {
     "correctness": "error",
-    "suspicious": "error"
+    "suspicious": "error",
   },
   "env": {
     "builtin": true,
-    "es2022": true
+    "es2022": true,
   },
-  "ignorePatterns": ["dist/", "node_modules/", ".cache/", "src/generated/"]
+  "ignorePatterns": ["dist/", "node_modules/", ".cache/", "src/generated/"],
 }

@@ -11,7 +11,8 @@
     ".cache/",
     "src/generated/",
     "package-lock.json",
+    // Prose stays hand-formatted; reflowing would rewrap README tables and ADR wording.
     "docs/",
-    "*.md"
-  ]
+    "*.md",
+  ],
 }
