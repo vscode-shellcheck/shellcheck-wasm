@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "ShellCheck compiled to WebAssembly (WASI command module) with a minimal runner",
   "license": "GPL-3.0-or-later",
-  "repository": "github:vscode-shellcheck/shellcheck-wasm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vscode-shellcheck/shellcheck-wasm.git"
+  },
   "files": [
     "dist",
     "README.md",
