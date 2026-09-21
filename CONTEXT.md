@@ -32,7 +32,7 @@ A directory the Host exposes to the Artifact through WASI. ShellCheck needs one 
 _Avoid_: mount, sandbox
 
 **Parity**:
-The property that, for the same args, stdin and filesystem, the Artifact's stdout, stderr and exit code are byte-identical to the same ShellCheck version's native binary. The acceptance bar for every Artifact.
+The property that, for the same args, stdin, environment and filesystem, the Artifact's stdout, stderr and exit code are byte-identical to the same ShellCheck version's native binary. The acceptance bar for every Artifact.
 _Avoid_: compatibility, equivalence
 
 **Tail-call gate**:

@@ -3,8 +3,9 @@
 [ShellCheck](https://www.shellcheck.net/) compiled to a WASI command module, plus a minimal
 runner. This package exists primarily as the WebAssembly runtime of the
 [vscode-shellcheck](https://github.com/vscode-shellcheck/vscode-shellcheck) extension; other Node.js
-hosts can use it the same way. Output is byte-identical to the native `shellcheck` binary of the
-same version. The module uses wasm tail calls and requires Node.js 22 or later.
+hosts can use it the same way. Given the same args, stdin, environment and visible files, output
+is byte-identical to the native `shellcheck` binary of the same version. The module uses wasm tail
+calls and requires Node.js 22 or later.
 
 ## Install
 
@@ -20,20 +21,29 @@ import { loadModule, createReadOnlyPreopen, run } from "@vscode-shellcheck/shell
 const module = await loadModule(); // compile once, reuse for every run
 
 const preopen = createReadOnlyPreopen("/path/to/workspace"); // visible to ShellCheck as "/"
-const result = run(module, {
-  args: ["-f", "json1", "-s", "bash", "-"],
-  stdin: script,
-  env: { PWD: "/sub/dir" }, // guest path of the script's directory, inside the preopen
-  preopens: [preopen],
-});
-preopen.dispose();
-
-const { comments } = JSON.parse(new TextDecoder().decode(result.stdout));
+try {
+  const result = run(module, {
+    args: ["-f", "json1", "-s", "bash", "-"],
+    stdin: script,
+    env: { PWD: "/sub/dir" }, // guest path of the script's directory, inside the preopen
+    preopens: [preopen],
+  });
+  const { comments } = JSON.parse(new TextDecoder().decode(result.stdout));
+} finally {
+  preopen.dispose();
+}
 ```
 
 `exitCode` is ShellCheck's own: `0` no findings, `1` findings, `2` or higher for invalid input.
-`PWD` must be a path inside one of the preopens, or unset. The runner is synchronous and does no
-threading, cancellation or filesystem policy; those are host concerns.
+`PWD` must be a path inside one of the preopens, or unset.
+
+The runner is synchronous: it blocks the calling thread until ShellCheck exits, with no timeout,
+cancellation or output limit. Hosts that need any of those run it in a Worker and own the limits.
+
+`createReadOnlyPreopen` refuses guest paths that resolve outside its directory, including through
+symlinks. The check runs against the path as it is when ShellCheck asks, so a process that rewrites
+symlinks in that directory during a run can race it. Expose only directories that no untrusted
+process writes to while ShellCheck runs.
 
 ## Entry points
 

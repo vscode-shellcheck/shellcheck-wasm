@@ -475,8 +475,10 @@ class PreopenDirectory extends HostDirectory implements ReadOnlyPreopen {
 /**
  * A read-only WASI preopen serving `hostDir` to the guest at `guestPath` (default `/`).
  * Guest paths are contained by real path: anything that resolves outside `hostDir`,
- * including through a symlink, is refused with `ENOTCAPABLE`. Every mutating call
- * fails with `EROFS`. Call `dispose()` after the run to close host fds the guest left open.
+ * including through a symlink, is refused with `ENOTCAPABLE`. The check is not atomic with
+ * the open that follows it, so a process rewriting symlinks under `hostDir` during a run can
+ * race it; Node has no `openat` to close that window. Every mutating call fails with `EROFS`.
+ * Call `dispose()` after the run, even if it threw, to close host fds the guest left open.
  */
 export function createReadOnlyPreopen(hostDir: string, guestPath = "/"): ReadOnlyPreopen {
   return new PreopenDirectory(new PreopenRoot(hostDir), guestPath);
