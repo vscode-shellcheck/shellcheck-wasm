@@ -15,6 +15,10 @@ _Avoid_: tool version, upstream version
 **Package version**:
 The npm semver of this package. Bumps independently of the ShellCheck version so wrapper fixes can ship without a new ShellCheck release.
 
+**Build info**:
+The metadata describing how a given Artifact was built: its ShellCheck version, toolchain versions, compiler flags, target features, digest and size. Produced together with the Artifact and exposed to Hosts as a typed value.
+_Avoid_: build metadata, manifest
+
 **Command module**:
 The WASI execution model the Artifact uses: exports `_start`, reads argv/stdin, writes stdout/stderr, exits. One run per `WebAssembly.Instance`. Chosen over a reactor module so output stays byte-identical to native ShellCheck.
 _Avoid_: reactor, JSFFI module
@@ -32,7 +36,7 @@ A directory the Host exposes to the Artifact through WASI. ShellCheck needs one 
 _Avoid_: mount, sandbox
 
 **Parity**:
-The property that, for the same args, stdin and filesystem, the Artifact's stdout, stderr and exit code are byte-identical to the same ShellCheck version's native binary. The acceptance bar for every Artifact.
+The property that, for the same args, stdin, environment and filesystem, the Artifact's stdout, stderr and exit code are byte-identical to the same ShellCheck version's native binary. The acceptance bar for every Artifact.
 _Avoid_: compatibility, equivalence
 
 **Tail-call gate**:
