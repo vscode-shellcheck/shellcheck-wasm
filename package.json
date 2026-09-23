@@ -36,6 +36,7 @@
     "build": "npm run gen:version && npm run gen:build-info && tsc -p tsconfig.build.json",
     "build:wasm": "scripts/build-wasm.sh",
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
+    "bench": "node scripts/bench.mjs",
     "lint": "oxlint",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
