@@ -1,7 +1,8 @@
 # shellcheck-wasm
 
 npm package `@vscode-shellcheck/shellcheck-wasm`: ShellCheck compiled to a WASI command module
-plus a synchronous TypeScript runner. Built in GitHub Actions from pinned inputs; the artifact is
+plus a TypeScript runner that lints in a Host-supplied Worker and reads files only through the
+Host's async file system. Built in GitHub Actions from pinned inputs; the artifact is
 never committed. Vocabulary: `CONTEXT.md` (use its terms). Decisions: `docs/adr/`. Plans: `docs/plans/`.
 
 ## Layout
@@ -9,9 +10,13 @@ never committed. Vocabulary: `CONTEXT.md` (use its terms). Decisions: `docs/adr/
 - `buildtools/wasm/` — everything the Docker build reads: `Dockerfile`, pins (`version.txt`,
   `shellcheck-src.sha256`, `ghc-wasm-meta.txt`), `cabal.project`, `build.sh` (every step after
   the sources are unpacked), the tail-call gate script.
-- `src/generated/` — written by `npm run build` from `buildtools/wasm/version.txt`; gitignored.
-- `dist/` — compiled JS plus `shellcheck.wasm`, `shellcheck.wasm.sha256`, `build-info.json`; gitignored.
-- `.cache/native/` — native ShellCheck for the parity suite; gitignored.
+- `src/generated/` — written by `npm run build` from `buildtools/wasm/version.txt` and
+  `dist/build-info.json`; gitignored.
+- `dist/` — compiled JS plus `shellcheck.wasm`, `shellcheck.wasm.sha256`, `build-info.json`;
+  gitignored. `build-info.json` is not packed (it is compiled into `BUILD_INFO`).
+- `test/support/` — test-only Worker entries and `ShellCheckFileSystem` adapters.
+- `.cache/native/` — native ShellCheck for the parity suite; `.cache/bench/` — `npm run bench`
+  scratch; gitignored.
 
 ## Working locally
 
@@ -19,16 +24,20 @@ Scripts are defined in `package.json`; there is no Docker on the dev machine, so
 is CI-only.
 
 1. `npm ci`
-2. Get an artifact into `dist/`: download `shellcheck.wasm` and `build-info.json` from a GitHub
-   Release, or use the dev stand-in, the upstream 0.11.0 command module (no tail calls, fine for
-   runner and parity tests, never for a release):
-   `mkdir -p dist && curl -fL -o dist/shellcheck.wasm https://raw.githubusercontent.com/wasilibs/go-shellcheck/24025c1590296bcce8e494624e8c3561740a32a4/internal/wasm/shellcheck.wasm`
+2. Get an artifact into `dist/`: download `shellcheck.wasm`, `shellcheck.wasm.sha256` and
+   `build-info.json` from a GitHub Release for the ShellCheck version in `version.txt`.
+   `npm run build` refuses a `build-info.json` whose sha256 does not match the artifact.
 3. `npm run fetch:native`
 4. `npm run build && npm run lint && npm run fmt:check && npm test`
 
-Tests print `[skip] …` and skip when `dist/shellcheck.wasm`, the native binary,
-`dist/build-info.json` or `LICENSE` is missing; with `CI=1` the same conditions fail
-(`test/helpers.ts`). With the stand-in, only the `build-info.json` skip remains.
+Tests that start a Worker load `dist/worker.js`, so rebuild after changing `src/`; they fail
+when `dist/` is older than `src/`. Tests print `[skip] …` and skip when `dist/shellcheck.wasm`,
+`dist/worker.js`, the native binary or `LICENSE` is missing; with `CI=1` the same conditions
+fail (`test/helpers.ts`).
+
+`npm run bench` compares per-lint latency with the published 0.1.1 runner and native
+ShellCheck (`scripts/bench.mjs`, several minutes); it exits 1 when the new runner is more than
+10% slower than 0.1.1.
 
 ## Invariants
 
@@ -39,10 +48,15 @@ Tests print `[skip] …` and skip when `dist/shellcheck.wasm`, the native binary
 - The tail-call gate runs on the pre-`wasm-opt` linker output because `wasm-opt --enable-tail-call`
   rewrites `target_features`. `-mtail-call` stays in `WASM_CFLAGS`: ghc-wasm-meta dropped it from
   its defaults in 2025-09, and GHC only emits `return_call` when the flag is baked in.
-- Guest `PWD` must be inside a preopen or unset. The GHC RTS chdir()s to it at init; on failure
-  the run exits 1 with empty stdout and `hs_init_ghc: chdir(...) failed` on stderr.
-- The runner stays free of threads, cancellation and filesystem policy; those are host
-  concerns (ADR 0005).
+- Guest `PWD` must name a directory in the lint's `fs`, or be unset. The GHC RTS chdir()s to it
+  at init; on failure the run exits 1 with empty stdout and `hs_init_ghc: chdir(...) failed` on
+  stderr.
+- No shipped module imports `node:*` or a bare Node built-in, and files reach the guest only
+  through the Host's `ShellCheckFileSystem` (ADR 0006; guarded by `test/package.test.ts`). The
+  caller-side entry `.` does not load the WASI shim; only `./worker` does.
+- The package provides the Worker protocol, bridge, FIFO queue and `AbortSignal` cancellation;
+  creating Workers, what to mount, scheduling policy and watchdog durations stay in the Host
+  (ADR 0005).
 - `wasm32-wasi-cabal` is the wrapper ghc-wasm-meta ships (cabal 3.14.x). The wrapper breaks with
   cabal 3.16; keep the shipped one.
 
@@ -65,7 +79,8 @@ The Dockerfile is validated by review and by `ci.yml`, which builds the artifact
    `npm publish --provenance` through npm Trusted Publishing (no token secret; npm-side setup is
    package `@vscode-shellcheck/shellcheck-wasm`, repo `vscode-shellcheck/shellcheck-wasm`,
    workflow `release.yml`), then creates the GitHub Release with `shellcheck.wasm`, `.sha256`
-   and `build-info.json`.
+   and `build-info.json`. A prerelease version (`x.y.z-next.n`) is published with
+   `--tag next` and its GitHub Release is marked as a prerelease; `latest` is untouched.
 
 `bump-shellcheck.yml` runs daily and opens `chore(wasm): bump ShellCheck to <tag>` PRs. PRs opened
 with `github.token` get no CI run; set the `BUMP_PR_TOKEN` secret (PAT or App token) so they do.

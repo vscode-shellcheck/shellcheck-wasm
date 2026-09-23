@@ -16,7 +16,7 @@ _Avoid_: tool version, upstream version
 The npm semver of this package. Bumps independently of the ShellCheck version so wrapper fixes can ship without a new ShellCheck release.
 
 **Build info**:
-The metadata describing how a given Artifact was built: its ShellCheck version, toolchain versions, compiler flags, target features, digest and size. Produced together with the Artifact and exposed to Hosts as a typed value.
+The metadata describing how a given Artifact was built: its ShellCheck version, toolchain versions, compiler flags, target features, digest and size. Produced together with the Artifact as `build-info.json` and compiled into the package as `BUILD_INFO`.
 _Avoid_: build metadata, manifest
 
 **Command module**:
@@ -24,16 +24,24 @@ The WASI execution model the Artifact uses: exports `_start`, reads argv/stdin, 
 _Avoid_: reactor, JSFFI module
 
 **Runner**:
-The thin JavaScript layer in this package that instantiates the Artifact with a WASI host and runs it once with given args/stdin, returning stdout/stderr/exit code. Contains no threading, cancellation or filesystem policy; those belong to the Host.
+The JavaScript layer in this package (`createShellCheck` plus the Worker side, `startWorker`) that runs the Artifact once per lint on a fresh `WebAssembly.Instance` inside a Worker, one lint at a time in call order, and returns stdout/stderr/exit code. It aborts a lint when told to but holds no policy about when; that belongs to the Host.
 _Avoid_: wrapper, FFI, binding
 
 **Host**:
-The consumer that embeds the Runner (e.g. the vscode-shellcheck extension). Owns Worker isolation, watchdogs, cancellation and which directories the Artifact may see.
+The consumer that embeds the Runner (e.g. the vscode-shellcheck extension). Creates the Worker, decides what each lint may see through its File system, and owns scheduling policy and watchdog durations.
 _Avoid_: client, consumer, caller
 
+**File system**:
+The async `ShellCheckFileSystem` (`stat`, `readFile`, `readDirectory`) a Host passes with a lint, run on the Host's thread. Paths are guest paths such as `/dir/.shellcheckrc`; symlink containment is its job.
+_Avoid_: backend, VFS
+
+**Bridge**:
+The SharedArrayBuffer channel that lets the Artifact's synchronous WASI calls in the Worker wait on the File system's async answers on the Host's thread.
+_Avoid_: RPC, proxy
+
 **Preopen**:
-A directory the Host exposes to the Artifact through WASI. ShellCheck needs one to discover `.shellcheckrc` and follow `source` directives; without one it can only lint stdin.
-_Avoid_: mount, sandbox
+The read-only directory tree the Artifact sees at guest `/` during one lint, served lazily from the File system through the Bridge. ShellCheck needs one to discover `.shellcheckrc` and follow `source` directives; a lint without a File system has none and can only lint stdin.
+_Avoid_: sandbox
 
 **Parity**:
 The property that, for the same args, stdin, environment and filesystem, the Artifact's stdout, stderr and exit code are byte-identical to the same ShellCheck version's native binary. The acceptance bar for every Artifact.
