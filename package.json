@@ -1,7 +1,7 @@
 {
   "name": "@vscode-shellcheck/shellcheck-wasm",
-  "version": "0.1.1",
-  "description": "ShellCheck compiled to WebAssembly (WASI command module) with a minimal runner",
+  "version": "0.2.0-next.0",
+  "description": "ShellCheck compiled to WebAssembly (WASI command module) with a Worker-based runner",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -9,6 +9,7 @@
   },
   "files": [
     "dist",
+    "!dist/build-info.json",
     "README.md",
     "LICENSE"
   ],
@@ -19,15 +20,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "default": "./dist/node.js"
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
     },
     "./shellcheck.wasm": "./dist/shellcheck.wasm",
-    "./build-info": {
-      "types": "./dist/build-info.d.ts",
-      "default": "./dist/build-info.js"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -35,9 +32,11 @@
   },
   "scripts": {
     "gen:version": "node scripts/gen-version.mjs",
-    "build": "npm run gen:version && tsc -p tsconfig.build.json",
+    "gen:build-info": "node scripts/gen-build-info.mjs",
+    "build": "npm run gen:version && npm run gen:build-info && tsc -p tsconfig.build.json",
     "build:wasm": "scripts/build-wasm.sh",
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
+    "bench": "node scripts/bench.mjs",
     "lint": "oxlint",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
