@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -11,6 +12,7 @@ import {
   repoRoot,
   skipHint,
   wasmHint,
+  wasmPath,
 } from "./helpers.js";
 
 const packageName = "@vscode-shellcheck/shellcheck-wasm";
@@ -61,8 +63,7 @@ describe("package", () => {
           "dist/index.d.ts",
           "dist/node.js",
           "dist/node.d.ts",
-          "dist/build-info.js",
-          "dist/build-info.d.ts",
+          "dist/generated/build-info.js",
           "package.json",
           "README.md",
         ]),
@@ -80,8 +81,8 @@ describe("package", () => {
       },
     );
 
-    it.skipIf(skipHint(!hasBuildInfo, buildInfoHint))("ships build-info.json", () => {
-      expect(npmPackDryRun().files.map((file) => file.path)).toContain("dist/build-info.json");
+    it("does not ship build-info.json, which is compiled in", () => {
+      expect(npmPackDryRun().files.map((file) => file.path)).not.toContain("dist/build-info.json");
     });
   });
 
@@ -102,27 +103,21 @@ describe("package", () => {
       expect(typeof node.loadModule).toBe("function");
       expect(typeof node.createReadOnlyPreopen).toBe("function");
       expect(node.wasmPath).toBe(path.join(repoRoot, "dist", "shellcheck.wasm"));
-      expect(typeof node.readBuildInfo).toBe("function");
+      expect(node.BUILD_INFO.shellcheckVersion).toBe(SHELLCHECK_VERSION);
     });
 
-    it("keeps dist/build-info.js free of the runner", () => {
-      const source = readFileSync(path.join(repoRoot, "dist", "build-info.js"), "utf8");
-      const imports = [...source.matchAll(/^import .* from "([^"]+)";$/gm)].map((m) => m[1]);
-      expect(imports).toEqual(["node:fs"]);
-    });
-
-    it.skipIf(skipHint(!hasBuildInfo, buildInfoHint))(
-      "reads build info for the same ShellCheck through the published entry point",
+    it.skipIf(skipHint(!hasBuildInfo, buildInfoHint) || skipHint(!hasWasm, wasmHint))(
+      "compiles in the build info of the artifact",
       () => {
         const output = nodeEval(
-          `import { readBuildInfo } from ${JSON.stringify(`${packageName}/build-info`)};
-         const info = readBuildInfo();
-         console.log(JSON.stringify([info === readBuildInfo(), info]));`,
+          `import { BUILD_INFO } from ${JSON.stringify(packageName)};
+         console.log(JSON.stringify(BUILD_INFO));`,
         );
-        const [cached, info] = JSON.parse(output) as [boolean, unknown];
-        expect(cached).toBe(true);
+        const info = JSON.parse(output) as { sha256: string; size: number };
         expect(info).toEqual(JSON.parse(readFileSync(buildInfoPath, "utf8")));
-        expect((info as { shellcheckVersion: string }).shellcheckVersion).toBe(SHELLCHECK_VERSION);
+        const wasm = readFileSync(wasmPath);
+        expect(info.sha256).toBe(createHash("sha256").update(wasm).digest("hex"));
+        expect(info.size).toBe(wasm.byteLength);
       },
     );
 
@@ -131,25 +126,25 @@ describe("package", () => {
         `console.log(JSON.stringify([
           import.meta.resolve(${JSON.stringify(packageName)}),
           import.meta.resolve(${JSON.stringify(`${packageName}/node`)}),
-          import.meta.resolve(${JSON.stringify(`${packageName}/build-info`)}),
           import.meta.resolve(${JSON.stringify(`${packageName}/shellcheck.wasm`)}),
           import.meta.resolve(${JSON.stringify(`${packageName}/package.json`)}),
         ]))`,
       );
-      const [index, node, buildInfo, wasm, pkg] = JSON.parse(resolved) as string[];
+      const [index, node, wasm, pkg] = JSON.parse(resolved) as string[];
       expect(index).toBe(`file://${path.join(repoRoot, "dist", "index.js")}`);
       expect(node).toBe(`file://${path.join(repoRoot, "dist", "node.js")}`);
-      expect(buildInfo).toBe(`file://${path.join(repoRoot, "dist", "build-info.js")}`);
       expect(wasm).toBe(`file://${path.join(repoRoot, "dist", "shellcheck.wasm")}`);
       expect(pkg).toBe(`file://${path.join(repoRoot, "package.json")}`);
     });
 
-    it("no longer exports build-info.json", () => {
-      const code = nodeEval(
-        `try { import.meta.resolve(${JSON.stringify(`${packageName}/build-info.json`)}); console.log("resolved"); }
-         catch (error) { console.log(error.code); }`,
-      );
-      expect(code).toBe("ERR_PACKAGE_PATH_NOT_EXPORTED");
+    it("no longer exports build-info.json or ./build-info", () => {
+      for (const subpath of ["/build-info.json", "/build-info"]) {
+        const code = nodeEval(
+          `try { import.meta.resolve(${JSON.stringify(packageName + subpath)}); console.log("resolved"); }
+           catch (error) { console.log(error.code); }`,
+        );
+        expect(code, subpath).toBe("ERR_PACKAGE_PATH_NOT_EXPORTED");
+      }
     });
 
     it.skipIf(skipHint(!hasWasm, wasmHint))(

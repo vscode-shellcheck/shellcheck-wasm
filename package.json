@@ -9,6 +9,7 @@
   },
   "files": [
     "dist",
+    "!dist/build-info.json",
     "README.md",
     "LICENSE"
   ],
@@ -24,10 +25,6 @@
       "default": "./dist/node.js"
     },
     "./shellcheck.wasm": "./dist/shellcheck.wasm",
-    "./build-info": {
-      "types": "./dist/build-info.d.ts",
-      "default": "./dist/build-info.js"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -35,7 +32,8 @@
   },
   "scripts": {
     "gen:version": "node scripts/gen-version.mjs",
-    "build": "npm run gen:version && tsc -p tsconfig.build.json",
+    "gen:build-info": "node scripts/gen-build-info.mjs",
+    "build": "npm run gen:version && npm run gen:build-info && tsc -p tsconfig.build.json",
     "build:wasm": "scripts/build-wasm.sh",
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
     "lint": "oxlint",
