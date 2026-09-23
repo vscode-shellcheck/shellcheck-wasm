@@ -120,14 +120,34 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      # A prerelease version (x.y.z-tag.n) goes to the `next` dist-tag so `latest` keeps
+      # pointing at the last stable release.
+      - name: Classify the version
+        id: channel
+        run: |
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Trusted Publishing: npm exchanges the job's OIDC token for publish rights, so no
       # NODE_AUTH_TOKEN is set anywhere in this workflow.
-      - run: npm publish --provenance --access public
+      - if: steps.channel.outputs.prerelease == 'false'
+        run: npm publish --provenance --access public
 
+      - if: steps.channel.outputs.prerelease == 'true'
+        run: npm publish --provenance --access public --tag next
+
+      # build-info.json is not in the npm tarball (its contents are compiled into BUILD_INFO)
+      # but stays a release asset next to the artifact it describes.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.channel.outputs.prerelease }}
         run: |
+          flags=(--verify-tag --generate-notes)
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" \
             dist/shellcheck.wasm dist/shellcheck.wasm.sha256 dist/build-info.json \
-            --verify-tag --generate-notes
+            "${flags[@]}"
