@@ -1,7 +1,7 @@
 {
   "name": "@vscode-shellcheck/shellcheck-wasm",
   "version": "0.1.1",
-  "description": "ShellCheck compiled to WebAssembly (WASI command module) with a minimal runner",
+  "description": "ShellCheck compiled to WebAssembly (WASI command module) with a Worker-based runner",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -20,9 +20,9 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "default": "./dist/node.js"
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
     },
     "./shellcheck.wasm": "./dist/shellcheck.wasm",
     "./package.json": "./package.json"

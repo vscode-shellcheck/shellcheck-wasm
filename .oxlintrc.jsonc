@@ -9,5 +9,9 @@
     "builtin": true,
     "es2022": true,
   },
+  "rules": {
+    // Aimed at window.postMessage; Worker and MessagePort postMessage take no targetOrigin.
+    "unicorn/require-post-message-target-origin": "off",
+  },
   "ignorePatterns": ["dist/", "node_modules/", ".cache/", "src/generated/"],
 }
