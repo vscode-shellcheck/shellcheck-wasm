@@ -15,4 +15,7 @@ if (!/^v\d+\.\d+\.\d+$/.test(version)) {
 }
 
 mkdirSync(dirname(outFile), { recursive: true });
-writeFileSync(outFile, `export const SHELLCHECK_VERSION = ${JSON.stringify(version)} as const;\n`);
+writeFileSync(
+  outFile,
+  `// SPDX-License-Identifier: MIT\n\nexport const SHELLCHECK_VERSION = ${JSON.stringify(version)} as const;\n`,
+);

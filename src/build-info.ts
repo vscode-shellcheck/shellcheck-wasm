@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /** How the bundled shellcheck.wasm was built, as recorded by the wasm build. */
 export interface BuildInfo {
   /** ShellCheck release tag, e.g. `v0.11.0`. */

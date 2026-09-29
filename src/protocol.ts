@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * Messages and shared-memory layout between `createShellCheck` and `startWorker`. Both sides
  * ship in the same package version, so the protocol carries no version of its own.

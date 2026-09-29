@@ -114,6 +114,8 @@ following links out of it.
 | ------------------- | -------------------------------------------------------------------------------------------- |
 | `.`                 | `createShellCheck`, `wasmUrl`, `SHELLCHECK_VERSION`, `BUILD_INFO` and types; no WASI shim    |
 | `./worker`          | `startWorker`, `ParentPort`: the Worker side                                                 |
+| `./client`          | `createShellCheck`, build constants and host-side types; no guest-side modules             |
+| `./browser/worker.js` | Self-contained classic browser Worker script                                             |
 | `./shellcheck.wasm` | The compiled ShellCheck module                                                               |
 | `./package.json`    | The package manifest                                                                         |
 
@@ -127,7 +129,9 @@ The package follows its own semver, independent of the bundled ShellCheck releas
 `SHELLCHECK_VERSION`; `BUILD_INFO` describes the build that produced the artifact. Prereleases
 are published under the `next` dist-tag.
 
-## License
+## Licensing
 
-GPL-3.0-or-later, same as ShellCheck. ShellCheck is copyright Vidar Holen and contributors; this
-wrapper is a derivative work.
+The `./client` entry and the host-side types and protocol it exposes are licensed under the MIT
+License; see [`LICENSE-MIT`](./LICENSE-MIT). The root entry, `./worker`, `./browser/worker.js` and
+the `shellcheck.wasm` artifact remain GPL-3.0-or-later, the same license as ShellCheck. ShellCheck
+is copyright Vidar Holen and contributors; this wrapper is a derivative work.

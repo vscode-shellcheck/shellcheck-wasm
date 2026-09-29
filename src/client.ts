@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 import type { FileType, ShellCheckFileSystem } from "./file-system.js";
 import {
   CHUNK_BYTES,

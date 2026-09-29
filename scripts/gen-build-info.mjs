@@ -65,7 +65,9 @@ const ordered = Object.fromEntries(Object.keys(FIELDS).map((field) => [field, in
 mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(
   outFile,
-  `import type { BuildInfo } from "../build-info.js";
+  `// SPDX-License-Identifier: MIT
+
+import type { BuildInfo } from "../build-info.js";
 
 export const BUILD_INFO: BuildInfo = ${JSON.stringify(ordered, null, 2)};
 `,
