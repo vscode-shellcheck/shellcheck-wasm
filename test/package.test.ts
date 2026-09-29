@@ -92,9 +92,13 @@ describe("package", () => {
           "dist/index.d.ts",
           "dist/worker.js",
           "dist/worker.d.ts",
+          "dist/client-entry.js",
+          "dist/client-entry.d.ts",
+          "dist/browser/worker.js",
           "dist/generated/build-info.js",
           "package.json",
           "README.md",
+          "LICENSE-MIT",
         ]),
       );
       expect(files).not.toContain("dist/build-info.json");
@@ -117,6 +121,8 @@ describe("package", () => {
     expect(Object.keys(manifest.exports)).toEqual([
       ".",
       "./worker",
+      "./client",
+      "./browser/worker.js",
       "./shellcheck.wasm",
       "./package.json",
     ]);
@@ -174,6 +180,8 @@ describe("package", () => {
           [
             "",
             "/worker",
+            "/client",
+            "/browser/worker.js",
             "/shellcheck.wasm",
             "/package.json",
             "/node",
@@ -185,6 +193,8 @@ describe("package", () => {
       expect(JSON.parse(resolved)).toEqual([
         `file://${path.join(distDir, "index.js")}`,
         `file://${path.join(distDir, "worker.js")}`,
+        `file://${path.join(distDir, "client-entry.js")}`,
+        `file://${path.join(distDir, "browser/worker.js")}`,
         `file://${path.join(distDir, "shellcheck.wasm")}`,
         `file://${path.join(repoRoot, "package.json")}`,
         "ERR_PACKAGE_PATH_NOT_EXPORTED",
