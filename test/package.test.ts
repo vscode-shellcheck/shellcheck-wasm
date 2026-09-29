@@ -102,6 +102,7 @@ describe("package", () => {
         ]),
       );
       expect(files).not.toContain("dist/build-info.json");
+      expect(files).not.toContain("dist/browser-worker.js");
       expect(files).not.toContain("dist/node.js");
       expect(files.filter((file) => file.endsWith(".test.js") || file.startsWith("test/"))).toEqual(
         [],

@@ -10,6 +10,7 @@
   "files": [
     "dist",
     "!dist/build-info.json",
+    "!dist/browser-worker.*",
     "README.md",
     "LICENSE",
     "LICENSE-MIT"

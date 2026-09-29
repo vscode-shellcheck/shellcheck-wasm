@@ -110,14 +110,14 @@ following links out of it.
 
 ## Entry points
 
-| Subpath             | Provides                                                                                     |
-| ------------------- | -------------------------------------------------------------------------------------------- |
-| `.`                 | `createShellCheck`, `wasmUrl`, `SHELLCHECK_VERSION`, `BUILD_INFO` and types; no WASI shim    |
-| `./worker`          | `startWorker`, `ParentPort`: the Worker side                                                 |
-| `./client`          | `createShellCheck`, build constants and host-side types; no guest-side modules             |
-| `./browser/worker.js` | Self-contained classic browser Worker script                                             |
-| `./shellcheck.wasm` | The compiled ShellCheck module                                                               |
-| `./package.json`    | The package manifest                                                                         |
+| Subpath               | Provides                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `.`                   | `createShellCheck`, `wasmUrl`, `SHELLCHECK_VERSION`, `BUILD_INFO` and types; no WASI shim |
+| `./client`            | The same without `wasmUrl`, for Hosts that bundle it; MIT and free of `import.meta`       |
+| `./worker`            | `startWorker`, `ParentPort`: the Worker side                                              |
+| `./browser/worker.js` | The Worker side as one classic script, for `new Worker(url)` in a browser                 |
+| `./shellcheck.wasm`   | The compiled ShellCheck module                                                            |
+| `./package.json`      | The package manifest                                                                      |
 
 Bundlers that relocate modules can copy the artifact from
 `require.resolve("@vscode-shellcheck/shellcheck-wasm/shellcheck.wasm")` and pass their own
@@ -131,7 +131,6 @@ are published under the `next` dist-tag.
 
 ## Licensing
 
-The `./client` entry and the host-side types and protocol it exposes are licensed under the MIT
-License; see [`LICENSE-MIT`](./LICENSE-MIT). The root entry, `./worker`, `./browser/worker.js` and
-the `shellcheck.wasm` artifact remain GPL-3.0-or-later, the same license as ShellCheck. ShellCheck
-is copyright Vidar Holen and contributors; this wrapper is a derivative work.
+GPL-3.0-or-later, same as ShellCheck (copyright Vidar Holen and contributors), except the
+`./client` entry and the modules behind it, which are MIT ([`LICENSE-MIT`](./LICENSE-MIT)) so that
+a Host can bundle them (ADR 0007).
