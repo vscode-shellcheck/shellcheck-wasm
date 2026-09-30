@@ -7,7 +7,6 @@ import type { FileStat, FileType } from "./file-system.js";
 type FdstatResult = { ret: number; fdstat: wasi.Fdstat | null };
 type FilestatResult = { ret: number; filestat: wasi.Filestat | null };
 type ReadResult = { ret: number; data: Uint8Array };
-type WriteResult = { ret: number; nwritten: number };
 type SeekResult = { ret: number; offset: bigint };
 type OpenResult = { ret: number; fd_obj: Fd | null };
 type ReaddirResult = { ret: number; dirent: wasi.Dirent | null };
@@ -122,23 +121,13 @@ class ReadOnlyFile extends OpenFile {
     return { ret: wasi.ERRNO_SUCCESS, filestat: this.mount.filestat(this.path, stat) };
   }
 
-  override fd_write(): WriteResult {
-    return { ret: wasi.ERRNO_ROFS, nwritten: 0 };
-  }
-
-  override fd_pwrite(): WriteResult {
-    return { ret: wasi.ERRNO_ROFS, nwritten: 0 };
-  }
-
+  // The shim's OpenFile resizes its copy and reports success; every other write already
+  // fails there or in the base Fd.
   override fd_allocate(): number {
     return wasi.ERRNO_ROFS;
   }
 
   override fd_filestat_set_size(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override fd_filestat_set_times(): number {
     return wasi.ERRNO_ROFS;
   }
 }
@@ -245,58 +234,6 @@ class ReadOnlyDirectory extends Fd {
     return { ret: wasi.ERRNO_SUCCESS, fd_obj: new ReadOnlyFile(this.mount, path, stat, data) };
   }
 
-  override fd_write(): WriteResult {
-    return { ret: wasi.ERRNO_ROFS, nwritten: 0 };
-  }
-
-  override fd_pwrite(): WriteResult {
-    return { ret: wasi.ERRNO_ROFS, nwritten: 0 };
-  }
-
-  override fd_allocate(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override fd_filestat_set_size(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override fd_filestat_set_times(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override path_create_directory(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override path_filestat_set_times(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override path_link(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override path_unlink(): { ret: number; inode_obj: null } {
-    return { ret: wasi.ERRNO_ROFS, inode_obj: null };
-  }
-
-  override path_lookup(): { ret: number; inode_obj: null } {
-    return { ret: wasi.ERRNO_ROFS, inode_obj: null };
-  }
-
-  override path_remove_directory(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override path_rename(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
-  override path_unlink_file(): number {
-    return wasi.ERRNO_ROFS;
-  }
-
   private dirent(next: bigint, path: string, name: string, filetype: number): ReaddirResult {
     return {
       ret: wasi.ERRNO_SUCCESS,
@@ -313,8 +250,8 @@ class PreopenRoot extends ReadOnlyDirectory {
 
 /**
  * The read-only WASI preopen at guest `/` for one lint. Every lookup goes through `fs`, so
- * the tree is only ever as deep as what ShellCheck asks for; every mutation fails with
- * `EROFS`.
+ * the tree is only ever as deep as what ShellCheck asks for. `SyncFileSystem` has no write
+ * operation, so no mutation reaches the Host; the guest sees each one fail.
  */
 export function createReadOnlyPreopen(fs: SyncFileSystem): Fd {
   return new PreopenRoot(new Mount(fs), "/");
