@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+/*! SPDX-License-Identifier: MIT */
 
 import type { FileType, ShellCheckFileSystem } from "./file-system.js";
 import {
@@ -14,7 +14,6 @@ import {
   errnoOf,
   type FileSystemOp,
   type FromWorker,
-  type LintMessage,
   type ToWorker,
 } from "./protocol.js";
 
@@ -79,9 +78,15 @@ export interface ShellCheck {
 
 interface Job {
   readonly request: LintRequest;
+  settled: boolean;
   readonly resolve: (result: LintResult) => void;
   readonly reject: (error: unknown) => void;
-  session?: Session;
+}
+
+interface Pending {
+  readonly fs: ShellCheckFileSystem | undefined;
+  readonly resolve: (result: LintResult) => void;
+  readonly reject: (error: unknown) => void;
 }
 
 const encoder = new TextEncoder();
@@ -135,7 +140,7 @@ class Session {
   closed = false;
   private readonly control: Int32Array;
   private readonly data: Uint8Array;
-  private active: Job | undefined;
+  private current: Pending | undefined;
   private payload: Uint8Array | undefined;
   private sent = 0;
 
@@ -148,33 +153,42 @@ class Session {
     this.data = new Uint8Array(shared, HEADER_BYTES, CHUNK_BYTES);
     port.onMessage((message) => this.receive(message as FromWorker));
     port.onError((error) => {
-      this.fail(new Error(`ShellCheck worker failed: ${describe(error)}`, { cause: error }));
+      void this.terminate(
+        new Error(`ShellCheck worker failed: ${describe(error)}`, { cause: error }),
+      );
     });
     port.onExit?.((exitCode) => {
-      this.fail(new Error(`ShellCheck worker exited unexpectedly with code ${exitCode}`));
+      void this.terminate(new Error(`ShellCheck worker exited unexpectedly with code ${exitCode}`));
     });
     this.post({ type: "init", module, shared });
   }
 
-  lint(job: Job): void {
-    if (this.closed) throw new Error("ShellCheck worker is gone");
-    const { args, stdin = "", env = {}, fs } = job.request;
-    const message: LintMessage = {
-      type: "lint",
-      args: [...args],
-      stdin,
-      env: { ...env },
-      mounted: fs !== undefined,
-    };
-    this.post(message);
-    this.active = job;
-    job.session = this;
+  get busy(): boolean {
+    return this.current !== undefined;
   }
 
-  terminate(): Promise<void> {
+  /** Runs one lint; the caller must wait for it to settle before starting another. */
+  lint(request: LintRequest): Promise<LintResult> {
+    const { args, stdin = "", env = {}, fs } = request;
+    return new Promise((resolve, reject) => {
+      if (this.closed) throw new Error("ShellCheck worker is gone");
+      this.post({
+        type: "lint",
+        args: [...args],
+        stdin,
+        env: { ...env },
+        mounted: fs !== undefined,
+      });
+      this.current = { fs, resolve, reject };
+    });
+  }
+
+  /** Terminates the Worker; a lint still running on it rejects with `reason`. */
+  terminate(reason: unknown = new Error("ShellCheck worker was terminated")): Promise<void> {
     if (this.closed) return Promise.resolve();
     this.closed = true;
-    this.active = undefined;
+    this.current?.reject(reason);
+    this.current = undefined;
     return Promise.resolve(this.port.terminate()).then(
       () => undefined,
       () => undefined,
@@ -183,13 +197,6 @@ class Session {
 
   private post(message: ToWorker): void {
     this.port.postMessage(message);
-  }
-
-  private fail(error: Error): void {
-    if (this.closed) return;
-    const job = this.active;
-    void this.terminate();
-    job?.reject(error);
   }
 
   private receive(message: FromWorker): void {
@@ -203,13 +210,13 @@ class Session {
         return;
       case "done":
       case "failed": {
-        const job = this.active;
-        this.active = undefined;
+        const lint = this.current;
+        this.current = undefined;
         if (message.type === "done") {
           const { stdout, stderr, exitCode } = message;
-          job?.resolve({ stdout, stderr, exitCode });
+          lint?.resolve({ stdout, stderr, exitCode });
         } else {
-          job?.reject(new Error(`ShellCheck failed: ${message.name}: ${message.message}`));
+          lint?.reject(new Error(`ShellCheck failed: ${message.name}: ${message.message}`));
         }
         return;
       }
@@ -217,18 +224,18 @@ class Session {
   }
 
   private async serve(op: FileSystemOp, path: string): Promise<void> {
-    const job = this.active;
+    const lint = this.current;
     let status = ERRNO_SUCCESS;
     let payload: Uint8Array = new Uint8Array();
     try {
-      const fs = job?.request.fs;
+      const fs = lint?.fs;
       if (fs === undefined) throw new Error("no file system for this lint");
       payload = await call(fs, op, path);
     } catch (error) {
       status = errnoOf(error);
     }
     // The lint may have been aborted, and its Worker terminated, while fs was busy.
-    if (this.closed || this.active !== job) return;
+    if (this.closed || this.current !== lint) return;
     this.control[STATUS] = status;
     this.control[TOTAL] = payload.byteLength;
     this.payload = payload;
@@ -258,7 +265,7 @@ class Scheduler implements ShellCheck {
   private readonly queue: Job[] = [];
   private running: Job | undefined;
   private session: Session | undefined;
-  private spawning: Promise<Session> | undefined;
+  private draining = false;
   private disposed = false;
 
   constructor(private readonly options: ShellCheckOptions) {}
@@ -267,31 +274,28 @@ class Scheduler implements ShellCheck {
     if (this.disposed) return Promise.reject(new Error("ShellCheck instance is disposed"));
     if (signal?.aborted) return Promise.reject(abortReason(signal));
     return new Promise<LintResult>((resolve, reject) => {
-      let settled = false;
       const settle = (): boolean => {
-        if (settled) return false;
-        settled = true;
+        if (job.settled) return false;
+        job.settled = true;
         signal?.removeEventListener("abort", onAbort);
-        if (this.running === job) {
-          this.running = undefined;
-          void this.pump();
-        }
         return true;
       };
       const job: Job = {
         request,
+        settled: false,
         resolve: (result) => settle() && resolve(result),
         reject: (error) => settle() && reject(error),
       };
       const onAbort = (): void => {
         const queued = this.queue.indexOf(job);
         if (queued !== -1) this.queue.splice(queued, 1);
-        if (this.running === job) void job.session?.terminate();
+        // Only a lint the Worker has started needs the Worker gone.
+        if (this.running === job && this.session?.busy) void this.session.terminate();
         job.reject(abortReason(signal!));
       };
       signal?.addEventListener("abort", onAbort, { once: true });
       this.queue.push(job);
-      void this.pump();
+      void this.drain();
     });
   }
 
@@ -300,34 +304,28 @@ class Scheduler implements ShellCheck {
     this.disposed = true;
     const error = new Error("ShellCheck instance is disposed");
     for (const job of [...this.queue.splice(0), this.running]) job?.reject(error);
-    const session = this.session ?? (await this.spawning?.catch(() => undefined));
-    this.session = undefined;
-    await session?.terminate();
+    await this.session?.terminate(error);
   }
 
-  private async pump(): Promise<void> {
-    if (this.running !== undefined || this.disposed) return;
-    const job = this.queue.shift();
-    if (job === undefined) return;
-    this.running = job;
-    try {
-      const session = await this.ensureSession();
-      // Aborted or disposed while the Worker was starting.
-      if (this.running === job) session.lint(job);
-    } catch (error) {
-      job.reject(error);
+  private async drain(): Promise<void> {
+    if (this.draining) return;
+    this.draining = true;
+    for (let job = this.queue.shift(); job !== undefined; job = this.queue.shift()) {
+      this.running = job;
+      try {
+        const session = await this.connect();
+        // Aborted while the Worker was starting.
+        if (!job.settled) job.resolve(await session.lint(job.request));
+      } catch (error) {
+        job.reject(error);
+      }
     }
+    this.running = undefined;
+    this.draining = false;
   }
 
-  private ensureSession(): Promise<Session> {
-    if (this.session !== undefined && !this.session.closed) return Promise.resolve(this.session);
-    this.spawning ??= this.spawn().finally(() => {
-      this.spawning = undefined;
-    });
-    return this.spawning;
-  }
-
-  private async spawn(): Promise<Session> {
+  private async connect(): Promise<Session> {
+    if (this.session !== undefined && !this.session.closed) return this.session;
     const module = await this.options.module;
     if (this.disposed) throw new Error("ShellCheck instance is disposed");
     const port = this.options.createWorker();

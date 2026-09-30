@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+/*! SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { WASI, type Fd } from "@bjorn3/browser_wasi_shim";
 import { MemoryInput, MemoryOutput } from "./fds.js";

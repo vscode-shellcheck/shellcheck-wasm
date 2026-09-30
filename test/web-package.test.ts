@@ -30,7 +30,7 @@ describe.skipIf(skipHint(!hasDist, distHint))("web entries", () => {
     const nonMit = Object.keys(metafile.inputs).filter(
       (input) =>
         !readFileSync(path.join(repoRoot, input), "utf8").startsWith(
-          "// SPDX-License-Identifier: MIT\n",
+          "/*! SPDX-License-Identifier: MIT */\n",
         ),
     );
     expect(nonMit).toEqual([]);
