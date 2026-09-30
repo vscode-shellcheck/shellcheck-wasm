@@ -3,24 +3,29 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createReadOnlyPreopen, run, type RunResult } from "../src/node.js";
 import {
+  createTestShellCheck,
   fixtureRoot,
   hasNative,
-  hasWasm,
-  loadTestModule,
   nativeHint,
   nativePath,
   skipHint,
-  text,
-  wasmHint,
+  skipWorkerTests,
+  type TestShellCheck,
 } from "./helpers.js";
+import { nodeFileSystem } from "./support/file-systems.js";
+
+interface Outcome {
+  stdout: Buffer;
+  stderr: Buffer;
+  exitCode: number;
+}
 
 interface Scenario {
   readonly name: string;
   readonly args: readonly string[];
   readonly stdin?: string;
-  /** Host directory exposed to the guest as `/`; native runs with cwd inside it. */
+  /** Host directory the guest sees as `/`; native runs with cwd inside it. */
   readonly hostDir?: string;
   /** Guest working directory (`PWD`), relative to `hostDir`. */
   readonly pwd?: string;
@@ -243,14 +248,14 @@ const scenarios: readonly Scenario[] = [
   },
 ];
 
-describe.skipIf(skipHint(!hasWasm, wasmHint) || skipHint(!hasNative, nativeHint))("parity", () => {
-  let module: WebAssembly.Module;
+describe.skipIf(skipWorkerTests() || skipHint(!hasNative, nativeHint))("parity", () => {
+  let shellcheck: TestShellCheck;
   let sandbox: string;
   let emptyCwd: string;
   let emptyHome: string;
 
-  beforeAll(async () => {
-    module = await loadTestModule();
+  beforeAll(() => {
+    shellcheck = createTestShellCheck();
     sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "shellcheck-wasm-parity-"));
     emptyCwd = path.join(sandbox, "cwd");
     emptyHome = path.join(sandbox, "home");
@@ -258,11 +263,12 @@ describe.skipIf(skipHint(!hasWasm, wasmHint) || skipHint(!hasNative, nativeHint)
     fs.mkdirSync(emptyHome);
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    await shellcheck.dispose();
     fs.rmSync(sandbox, { recursive: true, force: true });
   });
 
-  function runNative(scenario: Scenario): RunResult {
+  function runNative(scenario: Scenario): Outcome {
     const result = spawnSync(nativePath, [...scenario.args], {
       cwd:
         scenario.hostDir === undefined ? emptyCwd : path.join(scenario.hostDir, scenario.pwd ?? ""),
@@ -277,37 +283,38 @@ describe.skipIf(skipHint(!hasWasm, wasmHint) || skipHint(!hasNative, nativeHint)
     return { stdout: result.stdout, stderr: result.stderr, exitCode: result.status ?? -1 };
   }
 
-  function runWasm(scenario: Scenario): RunResult {
-    if (scenario.hostDir === undefined) {
-      return run(module, { args: scenario.args, stdin: scenario.stdin ?? "" });
-    }
-    const preopen = createReadOnlyPreopen(scenario.hostDir);
-    try {
-      return run(module, {
-        args: scenario.args,
-        stdin: scenario.stdin ?? "",
-        env: { PWD: path.posix.join("/", scenario.pwd ?? "") },
-        preopens: [preopen],
-      });
-    } finally {
-      preopen.dispose();
-    }
+  async function runWasm(scenario: Scenario): Promise<Outcome> {
+    const result = await shellcheck.lint({
+      args: scenario.args,
+      stdin: scenario.stdin ?? "",
+      ...(scenario.hostDir === undefined
+        ? {}
+        : {
+            env: { PWD: path.posix.join("/", scenario.pwd ?? "") },
+            fs: nodeFileSystem(scenario.hostDir),
+          }),
+    });
+    return {
+      stdout: Buffer.from(result.stdout),
+      stderr: Buffer.from(result.stderr),
+      exitCode: result.exitCode,
+    };
   }
 
   for (const scenario of scenarios) {
-    it(scenario.name, () => {
+    it(scenario.name, async () => {
       const native = runNative(scenario);
-      const wasm = runWasm(scenario);
+      const wasm = await runWasm(scenario);
 
       if (scenario.expectStdout !== undefined)
-        expect(text(native.stdout)).toContain(scenario.expectStdout);
+        expect(native.stdout.toString()).toContain(scenario.expectStdout);
       if (scenario.expectStderr !== undefined)
-        expect(text(native.stderr)).toContain(scenario.expectStderr);
+        expect(native.stderr.toString()).toContain(scenario.expectStderr);
       if (scenario.rejectStdout !== undefined)
-        expect(text(native.stdout)).not.toContain(scenario.rejectStdout);
+        expect(native.stdout.toString()).not.toContain(scenario.rejectStdout);
 
-      expect(text(wasm.stderr)).toBe(text(native.stderr));
-      expect(text(wasm.stdout)).toBe(text(native.stdout));
+      expect(wasm.stderr.toString()).toBe(native.stderr.toString());
+      expect(wasm.stdout.toString()).toBe(native.stdout.toString());
       expect(Buffer.compare(wasm.stdout, native.stdout)).toBe(0);
       expect(Buffer.compare(wasm.stderr, native.stderr)).toBe(0);
       expect(wasm.exitCode).toBe(native.exitCode);

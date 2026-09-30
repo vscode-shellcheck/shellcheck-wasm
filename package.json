@@ -1,16 +1,19 @@
 {
   "name": "@vscode-shellcheck/shellcheck-wasm",
-  "version": "0.1.1",
-  "description": "ShellCheck compiled to WebAssembly (WASI command module) with a minimal runner",
-  "license": "GPL-3.0-or-later",
+  "version": "0.2.0-next.1",
+  "description": "ShellCheck compiled to WebAssembly (WASI command module) with a Worker-based runner",
+  "license": "GPL-3.0-or-later AND MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vscode-shellcheck/shellcheck-wasm.git"
   },
   "files": [
     "dist",
+    "!dist/build-info.json",
+    "!dist/browser-worker.*",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "LICENSE-MIT"
   ],
   "type": "module",
   "sideEffects": false,
@@ -19,26 +22,28 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./node": {
-      "types": "./dist/node.d.ts",
-      "default": "./dist/node.js"
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
     },
+    "./client": {
+      "types": "./dist/client-entry.d.ts",
+      "default": "./dist/client-entry.js"
+    },
+    "./browser/worker.js": "./dist/browser/worker.js",
     "./shellcheck.wasm": "./dist/shellcheck.wasm",
-    "./build-info": {
-      "types": "./dist/build-info.d.ts",
-      "default": "./dist/build-info.js"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "gen:version": "node scripts/gen-version.mjs",
-    "build": "npm run gen:version && tsc -p tsconfig.build.json",
+    "build": "node scripts/build.ts && tsc -p tsconfig.build.json",
     "build:wasm": "scripts/build-wasm.sh",
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
+    "bench": "node scripts/bench.mjs",
     "lint": "oxlint",
+    "typecheck": "tsc -p tsconfig.json",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
@@ -49,6 +54,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.1",
+    "esbuild": "^0.27.7",
     "oxfmt": "^0.68.0",
     "oxlint": "^1.83.0",
     "typescript": "^7.0.2",

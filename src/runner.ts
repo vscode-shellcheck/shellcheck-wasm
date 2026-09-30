@@ -1,3 +1,5 @@
+/*! SPDX-License-Identifier: GPL-3.0-or-later */
+
 import { WASI, type Fd } from "@bjorn3/browser_wasi_shim";
 import { MemoryInput, MemoryOutput } from "./fds.js";
 
@@ -13,7 +15,7 @@ export interface RunOptions {
    * `hs_init_ghc: chdir(...) failed` and the run ends with no stdout.
    */
   env?: Readonly<Record<string, string>>;
-  /** Preopened directories, assigned fd 3, 4, … in order. See `createReadOnlyPreopen` in `./node`. */
+  /** Preopened directories, assigned fd 3, 4, … in order. */
   preopens?: readonly Fd[];
 }
 
