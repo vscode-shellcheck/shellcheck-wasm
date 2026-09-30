@@ -80,7 +80,7 @@ The Dockerfile is validated by review and by `ci.yml`, which builds the artifact
 ## Releasing
 
 semantic-release (`release.config.js`) cuts every release from the Conventional Commit subjects
-that land on a release branch, so PR titles decide the version (PRs are squash-merged).
+that land on a release branch, so PR titles decide the version (feature PRs are squash-merged).
 
 - `release.yml` runs on every push to `main` or `next`: it calls `ci.yml`, then runs
   `semantic-release`, which publishes to npm through Trusted Publishing (no token secret;
@@ -88,7 +88,15 @@ that land on a release branch, so PR titles decide the version (PRs are squash-m
   `vscode-shellcheck/shellcheck-wasm`, workflow `release.yml`), pushes tag `vX.Y.Z` and creates
   the GitHub Release with `shellcheck.wasm`, `.sha256` and `build-info.json`.
 - `main` publishes to the `latest` dist-tag. `next` publishes `x.y.z-next.n` to the `next`
-  dist-tag and marks its GitHub Release as a prerelease; merge `next` into `main` to promote.
+  dist-tag and marks its GitHub Release as a prerelease.
+- Target `next` with changes that should ship as a prerelease first; target `main` with fixes
+  and ShellCheck bumps that ship stable directly. Both branches carry the same files, AGENTS.md
+  included; nothing is branch-specific.
+- Promote by merging `next` into `main` with a merge commit, never squash or rebase: the
+  analyzer on `main` reads the individual commits, and the `x.y.z-next.n` tags must stay
+  reachable from `main`. A squash titled `chore: …` releases nothing.
+- After a fix lands on `main`, merge `main` back into `next` (merge commit) so `next` does not
+  drift and the next promotion merges cleanly.
 - `feat` → minor, `fix`/`perf` → patch, other types → no release. While the package is 0.x a
   breaking change (`!` or `BREAKING CHANGE:`) is a minor bump, not 1.0.0.
 - The version is never committed: `package.json` stays `0.0.0-semantic-release`; the published
