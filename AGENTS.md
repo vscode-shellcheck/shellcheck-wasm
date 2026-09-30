@@ -29,7 +29,7 @@ is CI-only.
    artifact: both inject it and `version.txt` into `src/build-info.ts` through
    `scripts/build-constants.ts` (esbuild `define` and vitest `define`).
 3. `npm run fetch:native`
-4. `npm run build && npm run lint && npm run fmt:check && npm test`
+4. `npm run build && npm run lint && npm run typecheck && npm run fmt:check && npm test`
 
 Tests that start a Worker load `dist/worker.js`, so rebuild after changing `src/`; they fail
 when `dist/` is older than `src/`. Tests print `[skip] …` and skip when `dist/worker.js`, the

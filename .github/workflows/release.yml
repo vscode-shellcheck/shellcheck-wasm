@@ -83,6 +83,7 @@ jobs:
       - run: bash scripts/fetch-native-shellcheck.sh
       - run: npm run build
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run fmt:check
       - run: npm test
 

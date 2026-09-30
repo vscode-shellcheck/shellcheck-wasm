@@ -43,6 +43,7 @@
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
     "bench": "node scripts/bench.mjs",
     "lint": "oxlint",
+    "typecheck": "tsc -p tsconfig.json",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
