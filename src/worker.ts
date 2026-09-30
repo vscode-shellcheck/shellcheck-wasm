@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+/*! SPDX-License-Identifier: GPL-3.0-or-later */
 
 import { Bridge } from "./bridge.js";
 import { createReadOnlyPreopen } from "./preopen.js";

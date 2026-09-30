@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+/*! SPDX-License-Identifier: MIT */
 
 /**
  * Messages and shared-memory layout between `createShellCheck` and `startWorker`. Both sides

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+/*! SPDX-License-Identifier: MIT */
 
 export { createShellCheck } from "./client.js";
 export type {
@@ -15,6 +15,4 @@ export type {
   FileType,
   ShellCheckFileSystem,
 } from "./file-system.js";
-export type { BuildInfo } from "./build-info.js";
-export { BUILD_INFO } from "./generated/build-info.js";
-export { SHELLCHECK_VERSION } from "./generated/version.js";
+export { BUILD_INFO, SHELLCHECK_VERSION, type BuildInfo } from "./build-info.js";

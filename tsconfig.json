@@ -14,6 +14,7 @@
     "declaration": true,
     "sourceMap": true,
     "skipLibCheck": true,
+    "allowJs": true,
     "outDir": "dist",
     "rootDir": "."
   },

@@ -10,8 +10,6 @@ never committed. Vocabulary: `CONTEXT.md` (use its terms). Decisions: `docs/adr/
 - `buildtools/wasm/` — everything the Docker build reads: `Dockerfile`, pins (`version.txt`,
   `shellcheck-src.sha256`, `ghc-wasm-meta.txt`), `cabal.project`, `build.sh` (every step after
   the sources are unpacked), the tail-call gate script.
-- `src/generated/` — written by `npm run build` from `buildtools/wasm/version.txt` and
-  `dist/build-info.json`; gitignored.
 - `dist/` — compiled JS plus `shellcheck.wasm`, `shellcheck.wasm.sha256`, `build-info.json`;
   gitignored. `build-info.json` is not packed (it is compiled into `BUILD_INFO`).
 - `test/support/` — test-only Worker entries and `ShellCheckFileSystem` adapters.
@@ -26,13 +24,15 @@ is CI-only.
 1. `npm ci`
 2. Get an artifact into `dist/`: download `shellcheck.wasm`, `shellcheck.wasm.sha256` and
    `build-info.json` from a GitHub Release for the ShellCheck version in `version.txt`.
-   `npm run build` refuses a `build-info.json` whose sha256 does not match the artifact.
+   `npm run build` and `npm test` refuse a `build-info.json` whose sha256 does not match the
+   artifact: both inject it and `version.txt` into `src/build-info.ts` through
+   `scripts/build-constants.mjs` (esbuild `define` and vitest `define`).
 3. `npm run fetch:native`
 4. `npm run build && npm run lint && npm run fmt:check && npm test`
 
 Tests that start a Worker load `dist/worker.js`, so rebuild after changing `src/`; they fail
-when `dist/` is older than `src/`. Tests print `[skip] …` and skip when `dist/shellcheck.wasm`,
-`dist/worker.js`, the native binary or `LICENSE` is missing; with `CI=1` the same conditions
+when `dist/` is older than `src/`. Tests print `[skip] …` and skip when `dist/worker.js`, the
+native binary or `LICENSE` is missing; with `CI=1` the same conditions
 fail (`test/helpers.ts`).
 
 `npm run bench` compares per-lint latency with the published 0.1.1 runner and native
@@ -54,8 +54,9 @@ ShellCheck (`scripts/bench.mjs`, several minutes); it exits 1 when the new runne
 - No shipped module imports `node:*` or a bare Node built-in, and files reach the guest only
   through the Host's `ShellCheckFileSystem` (ADR 0006; guarded by `test/package.test.ts`). The
   caller-side entry `.` does not load the WASI shim; only `./worker` does.
-- Everything `./client` reaches starts with `// SPDX-License-Identifier: MIT`; every other
-  source is GPL-3.0-or-later (ADR 0007; guarded by `test/web-package.test.ts`). `./client` has
+- Every source starts with `/*! SPDX-License-Identifier: … */`, which esbuild keeps and a
+  `//` comment would not. Everything `./client` reaches is MIT; every other source is
+  GPL-3.0-or-later (ADR 0007; guarded by `test/web-package.test.ts`). `./client` has
   no `import.meta`, and `dist/browser/worker.js` is a classic script.
 - The package provides the Worker protocol, bridge, FIFO queue and `AbortSignal` cancellation;
   creating Workers, what to mount, scheduling policy and watchdog durations stay in the Host

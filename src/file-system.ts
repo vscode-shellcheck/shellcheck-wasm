@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+/*! SPDX-License-Identifier: MIT */
 
 export type FileType = "file" | "directory" | "other";
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+/*! SPDX-License-Identifier: MIT */
 
 import type { FileType, ShellCheckFileSystem } from "./file-system.js";
 import {

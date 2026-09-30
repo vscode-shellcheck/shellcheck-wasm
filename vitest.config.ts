@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { buildConstants } from "./scripts/build-constants.mjs";
 
 export default defineConfig({
+  define: buildConstants(),
   test: {
     include: ["test/**/*.test.ts"],
     testTimeout: 60_000,

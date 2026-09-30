@@ -95,7 +95,7 @@ describe("package", () => {
           "dist/client-entry.js",
           "dist/client-entry.d.ts",
           "dist/browser/worker.js",
-          "dist/generated/build-info.js",
+          "dist/build-info.js",
           "package.json",
           "README.md",
           "LICENSE-MIT",
@@ -139,6 +139,15 @@ describe("package", () => {
       );
       expect(offenders).toEqual([]);
       expect(specifiersOf(path.join(distDir, "worker.js"))).toContain("./bridge.js");
+    });
+
+    it("keeps each module's SPDX header", () => {
+      const unmarked = distScripts()
+        .filter(
+          (file) => !/^\/\*! SPDX-License-Identifier: \S+ \*\/\n/.test(readFileSync(file, "utf8")),
+        )
+        .map((file) => path.relative(repoRoot, file));
+      expect(unmarked).toEqual([]);
     });
 
     it("keeps the WASI shim out of the caller's entry", () => {
