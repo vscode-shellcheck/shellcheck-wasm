@@ -85,6 +85,11 @@ The Dockerfile is validated by review and by `ci.yml`, which builds the artifact
 semantic-release (`release.config.js`) cuts every release from the Conventional Commit subjects
 that land on a release branch, so PR titles decide the version (feature PRs are squash-merged).
 
+- The repo's squash setting is "Pull request title" with a blank body. GitHub's default appends
+  every branch commit to the body, and a `BREAKING CHANGE:` footer there swallows the `* feat: …`
+  lines after it into the release notes' breaking section. Mark a breaking PR with `!` in its
+  title; the notes then use the subject as the breaking note.
+
 - `release.yml` runs on every push to `main` or `next`: it calls `ci.yml`, then runs
   `semantic-release`, which publishes to npm through Trusted Publishing (no token secret;
   npm-side setup is package `@vscode-shellcheck/shellcheck-wasm`, repo
