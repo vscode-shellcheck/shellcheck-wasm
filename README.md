@@ -5,9 +5,7 @@ lints in a Worker you provide and reads files only through a file system you pro
 package exists primarily as the WebAssembly runtime of the
 [vscode-shellcheck](https://github.com/vscode-shellcheck/vscode-shellcheck) extension; other
 JavaScript hosts can use it the same way. Given the same args, stdin, environment and visible
-files, output is byte-identical to the native `shellcheck` binary of the same version. The module
-uses wasm tail calls and requires Node.js 22 or later, or a browser with tail calls and
-`SharedArrayBuffer`.
+files, output is byte-identical to the native `shellcheck` binary of the same version.
 
 No module in the package imports `node:*`: the host supplies the Worker and, per lint, the files
 ShellCheck may read.
@@ -108,16 +106,29 @@ climbs out of `/` with `..` is refused before `fs` sees it. Symlinks are resolve
 resolves them: a host that must keep ShellCheck inside a directory has to keep its `fs` from
 following links out of it.
 
+## Requirements
+
+The artifact uses wasm tail calls and SIMD, and the Bridge needs `SharedArrayBuffer`, which a
+browser only gives a cross-origin isolated page:
+
+- Node.js 22 or later.
+- Chrome and Edge 112 or later, Firefox 121 or later, Safari 18.2 or later (macOS 13 or later,
+  iOS and iPadOS 18.2 or later).
+- Not supported: Safari 16.4 to 18.1 and Firefox ESR 115, which lack tail calls.
+
+`isArtifactSupported()` reports whether the current engine can compile the artifact, so that a
+host can say so instead of surfacing a `CompileError`.
+
 ## Entry points
 
-| Subpath               | Provides                                                                                  |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `.`                   | `createShellCheck`, `wasmUrl`, `SHELLCHECK_VERSION`, `BUILD_INFO` and types; no WASI shim |
-| `./client`            | The same without `wasmUrl`, for Hosts that bundle it; MIT and free of `import.meta`       |
-| `./worker`            | `startWorker`, `ParentPort`: the Worker side                                              |
-| `./browser/worker.js` | The Worker side as one classic script, for `new Worker(url)` in a browser                 |
-| `./shellcheck.wasm`   | The compiled ShellCheck module                                                            |
-| `./package.json`      | The package manifest                                                                      |
+| Subpath               | Provides                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `.`                   | `createShellCheck`, `isArtifactSupported`, `wasmUrl`, `SHELLCHECK_VERSION`, `BUILD_INFO` and types; no WASI shim |
+| `./client`            | The same without `wasmUrl`, for Hosts that bundle it; MIT and free of `import.meta`                              |
+| `./worker`            | `startWorker`, `ParentPort`: the Worker side                                                                     |
+| `./browser/worker.js` | The Worker side as one classic script, for `new Worker(url)` in a browser                                        |
+| `./shellcheck.wasm`   | The compiled ShellCheck module                                                                                   |
+| `./package.json`      | The package manifest                                                                                             |
 
 Bundlers that relocate modules can copy the artifact from
 `require.resolve("@vscode-shellcheck/shellcheck-wasm/shellcheck.wasm")` and pass their own
@@ -126,7 +137,8 @@ Bundlers that relocate modules can copy the artifact from
 ## Versioning
 
 The package follows its own semver, independent of the bundled ShellCheck release exposed as
-`SHELLCHECK_VERSION`; `BUILD_INFO` describes the build that produced the artifact. Prereleases
+`SHELLCHECK_VERSION`. `BUILD_INFO` describes the toolchain, and under `artifacts` each file it
+produced, keyed by name. Prereleases
 from the `next` branch are published under the `next` dist-tag.
 
 ## Licensing
