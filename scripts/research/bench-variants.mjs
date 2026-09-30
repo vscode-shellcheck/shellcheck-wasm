@@ -135,12 +135,17 @@ function nodeFileSystem(root) {
 }
 
 function compileMs(file) {
-  const code = `const b=require("fs").readFileSync(${JSON.stringify(file)});const t=performance.now();WebAssembly.compile(b).then(()=>console.log(performance.now()-t))`;
+  // A pending async compile does not keep Node's event loop alive, and anything else the child
+  // prints (version-manager shims, warnings) must not end up in the number.
+  const code = `const k=setInterval(()=>{},1000);const b=require("fs").readFileSync(${JSON.stringify(file)});const t=performance.now();WebAssembly.compile(b).then(()=>{console.log("COMPILE_MS="+(performance.now()-t));clearInterval(k)})`;
   const times = [];
   for (let i = 0; i < COMPILE_RUNS; i += 1) {
     const r = spawnSync(process.execPath, ["-e", code], { encoding: "utf8" });
-    if (r.status !== 0) return { error: r.stderr.trim().split("\n").pop() };
-    times.push(Number(r.stdout));
+    const match = /COMPILE_MS=([\d.]+)/.exec(r.stdout ?? "");
+    if (r.status !== 0 || match === null) {
+      return { error: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").pop() };
+    }
+    times.push(Number(match[1]));
   }
   return { median: median(times) };
 }
