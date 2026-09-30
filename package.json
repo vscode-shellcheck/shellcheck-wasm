@@ -38,7 +38,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
+    "build": "node scripts/build.ts && tsc -p tsconfig.build.json",
     "build:wasm": "scripts/build-wasm.sh",
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
     "bench": "node scripts/bench.mjs",

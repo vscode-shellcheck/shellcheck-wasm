@@ -14,9 +14,10 @@
     "declaration": true,
     "sourceMap": true,
     "skipLibCheck": true,
-    "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src", "test", "vitest.config.ts"]
+  "include": ["src", "test", "scripts/*.ts", "vitest.config.ts"]
 }

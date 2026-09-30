@@ -1,16 +1,16 @@
 import { readdirSync } from "node:fs";
-import { build } from "esbuild";
-import { buildConstants } from "./build-constants.mjs";
+import { build, type BuildOptions } from "esbuild";
+import { buildConstants } from "./build-constants.ts";
 
-let define;
+let define: Record<string, string>;
 try {
   define = buildConstants();
 } catch (error) {
-  console.error(`build: ${error.message}`);
+  console.error(`build: ${(error as Error).message}`);
   process.exit(1);
 }
 
-const common = { target: "es2022", define, logLevel: "warning" };
+const common: BuildOptions = { target: "es2022", define, logLevel: "warning" };
 
 await Promise.all([
   // One module per source file, so `.` never loads what only `./worker` needs.

@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { buildConstants } from "./scripts/build-constants.mjs";
+import { buildConstants } from "./scripts/build-constants.ts";
 
 export default defineConfig({
   define: buildConstants(),

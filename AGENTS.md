@@ -21,12 +21,13 @@ never committed. Vocabulary: `CONTEXT.md` (use its terms). Decisions: `docs/adr/
 Scripts are defined in `package.json`; there is no Docker on the dev machine, so `build:wasm`
 is CI-only.
 
-1. `npm ci`
+1. `npm ci` (Node 22.18 or later: `npm run build` runs `scripts/build.ts` through Node's type
+   stripping)
 2. Get an artifact into `dist/`: download `shellcheck.wasm`, `shellcheck.wasm.sha256` and
    `build-info.json` from a GitHub Release for the ShellCheck version in `version.txt`.
    `npm run build` and `npm test` refuse a `build-info.json` whose sha256 does not match the
    artifact: both inject it and `version.txt` into `src/build-info.ts` through
-   `scripts/build-constants.mjs` (esbuild `define` and vitest `define`).
+   `scripts/build-constants.ts` (esbuild `define` and vitest `define`).
 3. `npm run fetch:native`
 4. `npm run build && npm run lint && npm run fmt:check && npm test`
 

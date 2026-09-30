@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { BuildInfo } from "../src/build-info.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const versionFile = resolve(repoRoot, "buildtools/wasm/version.txt");
@@ -9,7 +10,7 @@ const infoFile = resolve(repoRoot, "dist/build-info.json");
 const wasmFile = resolve(repoRoot, "dist/shellcheck.wasm");
 
 /** Field name → expected `typeof`, in the order `src/build-info.ts` declares them. */
-const FIELDS = {
+const FIELDS: Record<keyof BuildInfo, string> = {
   shellcheckVersion: "string",
   ghcWasmMetaCommit: "string",
   ghcVersion: "string",
@@ -25,10 +26,8 @@ const FIELDS = {
  * The `define` map `src/build-info.ts` reads, for esbuild and for vitest, which runs `src/`
  * unbuilt. Throws unless `version.txt`, `dist/build-info.json` and `dist/shellcheck.wasm`
  * describe the same build.
- *
- * @returns {Record<string, string>}
  */
-export function buildConstants() {
+export function buildConstants(): Record<string, string> {
   const version = readFileSync(versionFile, "utf8").trim();
   if (!/^v\d+\.\d+\.\d+$/.test(version)) {
     throw new Error(
@@ -36,14 +35,14 @@ export function buildConstants() {
     );
   }
 
-  let info;
-  let wasm;
+  let info: Record<string, unknown>;
+  let wasm: Buffer;
   try {
     info = JSON.parse(readFileSync(infoFile, "utf8"));
     wasm = readFileSync(wasmFile);
   } catch (error) {
     throw new Error(
-      `${error.message}\nPut the artifact and its build-info.json in dist/: \`npm run build:wasm\` (Docker) or download both from a GitHub Release.`,
+      `${(error as Error).message}\nPut the artifact and its build-info.json in dist/: \`npm run build:wasm\` (Docker) or download both from a GitHub Release.`,
       { cause: error },
     );
   }

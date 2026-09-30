@@ -16,7 +16,7 @@ export interface BuildInfo {
   readonly size: number;
 }
 
-// Injected by scripts/build.mjs, and by vitest.config.ts for tests that load src/.
+// Injected by scripts/build.ts, and by vitest.config.ts for tests that load src/.
 declare const INJECTED_SHELLCHECK_VERSION: string;
 declare const INJECTED_BUILD_INFO: string;
 
