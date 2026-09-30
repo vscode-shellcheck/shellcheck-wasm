@@ -12,8 +12,13 @@
 - **SIMD 去不掉**。去掉 `-msimd128` 后仍有 91 个函数用 SIMD：它们来自 ghc-wasm-meta
   预编译的 RTS、wasi-libc、gmp，不是我们编的代码。想要无 SIMD 版就得自建 GHC bindist 和
   wasi-sdk sysroot，不值得。好在 SIMD 的门槛（Safari 16.4）比 tail call（18.2）低得多。
-- **慢多少**：x64 CI 上 notc 比 tc 慢 2–5%（小脚本）、9–15%（300 行）、13–20%（1500 行）。
-  Apple Silicon 与浏览器实测尚未完成。
+- **慢多少**：
+  - Node：x64 CI 上 notc 比 tc 慢 2–5%（小脚本）、9–15%（300 行）、13–20%（1500 行）；
+    Apple M3 Max 上 Node 24 慢 7–16%，Node 22 慢 6%。
+  - 浏览器（M3 Max，medium 脚本）：Chromium 慢 13%，WebKit 慢 6%，Firefox 基本不变（+0.3%）。
+- **浏览器里能跑**：最新 Chromium 153、Firefox 155、WebKit 26.6 三款里，两个版本都能编译，
+  输出与 native 逐字节一致。旧 WebKit 17.4 里探测正确返回 false，tc 编译失败，notc 能编译
+  （lint 因为该构建没有 `SharedArrayBuffer` 没跑成）。
 - **多大**：npm tarball 2.05 MB → 4.05 MB（+1.98 MB）；VSIX 约 +2.0 MB（deflate）。
 - **推荐**：现在**不发第二份 Artifact**（方案 C+），但在 `./client` 加一个几十行的
   `supportsTailCalls()` 探测，让 web Host 在不支持的浏览器里给出明确提示，而不是
@@ -118,7 +123,20 @@ export const supportsTailCalls = () => WebAssembly.validate(TAIL_CALL_PROBE);
 | Node 22.23（V8 12.4） | true | 5/5 parity | 5/5 parity |
 | Node 24.21（V8 13.6） | true | 5/5 parity | 5/5 parity |
 
-浏览器（Chromium / Firefox / WebKit）里的探测与运行尚未实测。
+浏览器（Playwright，Apple M3 Max，页面经 COOP/COEP 做 cross-origin isolation，走
+`./client` + `dist/browser/worker.js`；`scripts/research/browser-check.mjs`）：
+
+| 浏览器 | probe tailCall / simd | tc | notc |
+|---|---|---|---|
+| Chromium 153 | true / true | 4/4 parity | 4/4 parity |
+| Firefox 155 | true / true | 4/4 parity | 4/4 parity |
+| WebKit 26.6 | true / true | 4/4 parity | 4/4 parity |
+| WebKit 17.4（Playwright 1.45.3） | **false** / true | `CompileError: … wasm tail calls are not enabled, in function at index 17` | 编译成功；lint 没跑（见下） |
+
+- 旧 WebKit 那一行：页面 `crossOriginIsolated` 为 false，报 `Can't find variable:
+  SharedArrayBuffer`。Safari 从 15.2 起支持 COOP/COEP，所以这更像是 Playwright 这个旧
+  WebKit 构建的问题，而不是 Safari 17.4 本身的行为；**真 Safari 17.x 上 notc 能否跑完 lint 未验证**。
+- notc-nosimd 在所有浏览器里的结果都与 notc 相同，表里省略。
 
 ### 放在哪
 
@@ -185,7 +203,12 @@ vscode-shellcheck 侧只改一行：`joinPath(pkgDist, selectArtifact())`，桌�
 ### 推荐
 
 **现在做 C+。** 理由：受益人群约 1.8% 的浏览量，且与 vscode.dev 的真实用户重叠极小；
-代价是包体积翻倍和一整套双份流水线；B 让 99% 的桌面用户付 2–20% 的性能税，不划算。
+代价是包体积翻倍和一整套双份流水线；B 让绝大多数桌面用户付 6–20% 的性能税（Node 22/24，
+x64 与 arm64），不划算。
+
+浏览器实测没有改变这个结论，但让方案 A 的一种变体更便宜：tail call 在浏览器里的收益不大
+（Chromium 13%、WebKit 6%、Firefox 0%），所以真要上 A 时，web Host 可以对 WebKit 一律用 notc，
+几乎不损失性能，又绕开 WebKit 的 tail-call bug。
 
 **满足任一条件就升级到 A**（本分支的 Dockerfile/build.sh/workflow 可以直接复用）：
 
@@ -232,10 +255,40 @@ Node 24.21（AMD EPYC 7763）：
 - notc-nosimd 与 notc 没有可测差别，符合"SIMD 实际上没去掉"。
 - 共享 runner 上有噪声，看趋势：脚本越大差距越大，与 2026-09-21 的 `_start` 实测（Node 24 +13–16%）一致。
 
-### Apple Silicon 与浏览器
+### Apple M3 Max（macOS 26.7，`bench-variants.mjs`，N=30，WARM=5）
 
-尚未完成：`bench-variants.mjs`（Node 22/24，arm64）和 `browser-check.mjs`
-（Playwright Chromium / Firefox / WebKit，含旧版 WebKit）的实测结果待补。
+Node 24.21：
+
+| 脚本 | 行 | tc | notc | notc-nosimd | native | notc/tc | tc/native | notc/native |
+|---|---|---|---|---|---|---|---|---|
+| small | 23 | 39.7 | 42.6 | 43.0 | 22.1 | +7.3% | 1.80x | 1.93x |
+| medium | 307 | 372.1 | 418.1 | 421.0 | 113.9 | +12.3% | 3.27x | 3.67x |
+| large | 1503 | 2294.1 | 2656.6 | 2587.8 | 594.6 | +15.8% | 3.86x | 4.47x |
+
+Node 22.23：
+
+| 脚本 | 行 | tc | notc | notc-nosimd | native | notc/tc | tc/native | notc/native |
+|---|---|---|---|---|---|---|---|---|
+| small | 23 | 36.0 | 38.2 | 38.1 | 21.6 | +6.3% | 1.67x | 1.77x |
+| medium | 307 | 370.8 | 392.4 | 389.4 | 106.6 | +5.8% | 3.48x | 3.68x |
+| large | 1503 | 2343.5 | 2476.9 | 2482.5 | 568.9 | +5.7% | 4.12x | 4.35x |
+
+- 与 2026-09-21 的 `_start` 实测一致：Node 24 从 tail call 得到的好处比 Node 22 大。
+- 子进程编译耗时这次没测到（脚本 bug，已修）；进程内首次 `WebAssembly.compile`
+  （`engine-check.mjs`）tc 13–15 ms、notc 13–14 ms，没有差别。
+
+### 浏览器（Apple M3 Max，Playwright，medium 脚本约 500 行，WARM=3 后 15 轮中位数，ms/lint）
+
+| 浏览器 | tc | notc | notc/tc | compileStreaming tc / notc | 首轮 4 个 case 合计 tc / notc |
+|---|---|---|---|---|---|
+| Chromium 153 | 694.5 | 786.0 | +13.2% | 41 / 38 ms | 913 / 940 ms |
+| Firefox 155 | 775.9 | 778.6 | +0.3% | 83 / 55 ms | 1072 / 949 ms |
+| WebKit 26.6 | 622.3 | 657.0 | +5.6% | 469 / 458 ms | 954 / 948 ms |
+
+- Firefox 的 notc 与 tc 一样快。WebKit 只慢约 6%；如果将来 Host 为规避 iOS 上的 tail-call bug
+  对 WebKit 一律用 notc，代价很小。
+- WebKit 的 `compileStreaming` 要 450–470 ms（V8 和 SpiderMonkey 是懒编译，只要几十 ms），
+  与是否用 tail call 无关。
 
 ## 复现
 
@@ -249,6 +302,5 @@ Node 24.21（AMD EPYC 7763）：
 
 - WebKit 325447 是否影响本 Artifact（需要 iOS 27 真机）。
 - vscode.dev 现在是否仍需 `?vscode-coi=on`。
-- Apple Silicon 上的性能差距，以及三款浏览器里的探测结果和 parity。
-- 真 Safari 16.4–18.1 上的表现（计划用旧版 Playwright WebKit 近似，尚未完成）。
+- 真 Safari 16.4–18.1 上 notc 能否跑完 lint：Playwright 的 WebKit 17.4 构建里探测和编译都符合预期，但页面没有 `SharedArrayBuffer`，lint 没跑成。
 - ghc-wasm-meta 提到的 "ios webkit webview crashes" 的原始报告（commit 无链接，可能在私聊里）。

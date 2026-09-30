@@ -176,7 +176,9 @@ for (const name of BROWSERS) {
             r.exitCode === expected[c].exitCode,
         ]),
       );
-      v.allParity = Object.values(v.parity).every(Boolean);
+      // A lint that failed before any case ran has no results to vouch for.
+      v.allParity =
+        Object.keys(v.parity).length === cases.length && Object.values(v.parity).every(Boolean);
       delete v.results;
     }
     Object.assign(entry, result);
