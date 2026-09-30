@@ -1,0 +1,230 @@
+name: Research non-tail-call artifact
+
+# Builds the artifact in three variants from the same pins and compares them:
+#   tc          the shipped configuration (-msimd128 -mtail-call, tail calls required)
+#   notc        ghc-wasm-meta's default flags (-msimd128, tail calls forbidden)
+#   notc-nosimd neither flag (tail calls forbidden; SIMD left unchecked to see what remains)
+on:
+  push:
+    branches: [research/non-tail-call-artifact]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-non-tail-call-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: tc
+            cflags: "-Wno-error=int-conversion -O3 -mcpu=lime1 -mreference-types -msimd128 -mtail-call"
+            tail_call: require
+            forbid: ""
+          - variant: notc
+            cflags: "-Wno-error=int-conversion -O3 -mcpu=lime1 -mreference-types -msimd128"
+            tail_call: forbid
+            forbid: ""
+          - variant: notc-nosimd
+            cflags: "-Wno-error=int-conversion -O3 -mcpu=lime1 -mreference-types"
+            tail_call: forbid
+            forbid: ""
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read pins
+        id: pins
+        run: |
+          {
+            echo "shellcheck_version=$(cat buildtools/wasm/version.txt)"
+            echo "shellcheck_src_sha256=$(cat buildtools/wasm/shellcheck-src.sha256)"
+            echo "ghc_wasm_meta_commit=$(cat buildtools/wasm/ghc-wasm-meta.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: buildtools/wasm
+          file: buildtools/wasm/Dockerfile
+          target: artifact
+          outputs: type=local,dest=dist
+          provenance: false
+          build-args: |
+            SHELLCHECK_VERSION=${{ steps.pins.outputs.shellcheck_version }}
+            SHELLCHECK_SRC_SHA256=${{ steps.pins.outputs.shellcheck_src_sha256 }}
+            GHC_WASM_META_COMMIT=${{ steps.pins.outputs.ghc_wasm_meta_commit }}
+            WASM_CFLAGS=${{ matrix.cflags }}
+            TAIL_CALL=${{ matrix.tail_call }}
+            FORBID_FEATURES=${{ matrix.forbid }}
+          cache-from: type=gha,scope=research-${{ matrix.variant }}
+          cache-to: type=gha,scope=research-${{ matrix.variant }},mode=max
+
+      - name: Report
+        run: |
+          cat dist/build-info.json
+          cat dist/diag/summary.txt
+          mkdir -p diag && mv dist/diag "diag/${{ matrix.variant }}"
+          cp dist/build-info.json "diag/${{ matrix.variant }}/"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasm-${{ matrix.variant }}
+          path: dist/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: diag-${{ matrix.variant }}
+          path: diag/
+
+  test:
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [tc, notc, notc-nosimd]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: wasm-${{ matrix.variant }}
+          path: dist
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: bash scripts/fetch-native-shellcheck.sh
+      - run: npm run build
+      - run: npm test
+
+  engine-check:
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Node 18 (V8 10.2) ships wasm tail calls behind a flag: an engine without them.
+        node: [18, 22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wasm-*
+          path: artifacts
+      - name: Use the tc build for dist/
+        run: mkdir -p dist && cp artifacts/wasm-tc/* dist/
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: bash scripts/fetch-native-shellcheck.sh
+      - run: npm run build
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Probe, compile and lint each variant
+        run: |
+          node --version
+          node scripts/research/engine-check.mjs \
+            tc=artifacts/wasm-tc/shellcheck.wasm \
+            notc=artifacts/wasm-notc/shellcheck.wasm \
+            notc-nosimd=artifacts/wasm-notc-nosimd/shellcheck.wasm \
+            | tee "engine-node${{ matrix.node }}.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: engine-node${{ matrix.node }}
+          path: engine-node${{ matrix.node }}.json
+
+  bench:
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wasm-*
+          path: artifacts
+      - run: mkdir -p dist && cp artifacts/wasm-tc/* dist/
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: bash scripts/fetch-native-shellcheck.sh
+      - run: npm run build
+      - name: Bench
+        env:
+          N: "20"
+          WARM: "5"
+          BENCH_JSON: bench-node${{ matrix.node }}.json
+        run: |
+          node scripts/research/bench-variants.mjs \
+            tc=artifacts/wasm-tc/shellcheck.wasm \
+            notc=artifacts/wasm-notc/shellcheck.wasm \
+            notc-nosimd=artifacts/wasm-notc-nosimd/shellcheck.wasm \
+            | tee "bench-node${{ matrix.node }}.md"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bench-node${{ matrix.node }}
+          path: bench-node${{ matrix.node }}.*
+
+  sizes:
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wasm-*
+          path: artifacts
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Tarball and VSIX-style sizes
+        run: |
+          pack() {
+            npm pack --dry-run --json --ignore-scripts 2>/dev/null \
+              | node -e 'const [p]=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log(`tarball=${p.size} unpacked=${p.unpackedSize} files=${p.entryCount}`)'
+          }
+          zipsize() {
+            python3 -c 'import sys,zipfile,io
+          b=io.BytesIO(); z=zipfile.ZipFile(b,"w",zipfile.ZIP_DEFLATED)
+          for f in sys.argv[1:]: z.write(f)
+          z.close(); print(len(b.getvalue()))' "$@"
+          }
+          {
+            for v in tc notc notc-nosimd; do
+              f="artifacts/wasm-$v/shellcheck.wasm"
+              echo "$v: raw=$(wc -c < "$f") gzip9=$(gzip -9 -c "$f" | wc -c) deflate-zip=$(zipsize "$f") brotli=$( (command -v brotli >/dev/null && brotli -c -q 11 "$f" | wc -c) || echo n/a)"
+            done
+            rm -rf dist && mkdir dist && cp artifacts/wasm-tc/* dist/ && npm run build >/dev/null
+            echo "package with tc only: $(pack)"
+            cp artifacts/wasm-notc/shellcheck.wasm dist/shellcheck-baseline.wasm
+            echo "package with tc + notc: $(pack)"
+            rm dist/shellcheck-baseline.wasm
+            cp artifacts/wasm-notc/* dist/ && npm run build >/dev/null
+            echo "package with notc only: $(pack)"
+          } | tee sizes.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sizes
+          path: sizes.txt

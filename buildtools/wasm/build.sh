@@ -24,20 +24,85 @@ curl -fL --retry 5 -o "$fgl_dir/fgl-$fgl_version.tar.gz" \
   "https://hackage.haskell.org/package/fgl-$fgl_version/fgl-$fgl_version.tar.gz"
 echo "$fgl_sha256  $fgl_dir/fgl-$fgl_version.tar.gz" | sha256sum -c -
 
+tail_call="${TAIL_CALL:-require}"
+read -r -a forbid <<< "${FORBID_FEATURES:-}"
+case "$tail_call" in
+  require) ;;
+  forbid) forbid+=(tail-call) ;;
+  *) echo "TAIL_CALL must be require or forbid, got $tail_call" >&2; exit 1 ;;
+esac
+
 wasm32-wasi-cabal update
+started=$SECONDS
 wasm32-wasi-cabal build exe:shellcheck
+cabal_seconds=$((SECONDS - started))
 cp "$(wasm32-wasi-cabal list-bin exe:shellcheck)" "$out/shellcheck.linked.wasm"
 
-# Gate on the linker output: wasm-opt --enable-tail-call rewrites target_features.
-python3 "$tools/check-target-features.py" "$out/shellcheck.linked.wasm" --require tail-call
+# Research diagnostics: instruction counts and the functions that use SIMD, from the linker
+# output (which still has a name section). Printed so they survive a failing gate below.
+mkdir -p "$out/diag"
+wasm-tools print "$out/shellcheck.linked.wasm" > /tmp/linked.wat
+awk '
+  /^  \(func /     { name = $2; funcs++ }
+  /return_call/    { rc++; rcf[name] = 1 }
+  /(^|[ (])call /  { calls++ }
+  /call_indirect/  { ci++ }
+  /v128\.|i8x16\.|i16x8\.|i32x4\.|i64x2\.|f32x4\.|f64x2\./ { simd++; sf[name]++ }
+  END {
+    printf "funcs=%d\nreturn_call_lines=%d\nfuncs_with_return_call=%d\n", funcs, rc, length(rcf)
+    printf "call_lines=%d\ncall_indirect_lines=%d\nsimd_lines=%d\nfuncs_with_simd=%d\n", calls, ci, simd, length(sf)
+    for (f in sf) printf "%d %s\n", sf[f], f > "/tmp/simd-funcs.txt"
+  }' /tmp/linked.wat > "$out/diag/linked-counts.txt"
+touch /tmp/simd-funcs.txt
+sort -rn /tmp/simd-funcs.txt > "$out/diag/simd-funcs.txt"
+python3 "$tools/check-target-features.py" "$out/shellcheck.linked.wasm" \
+  > "$out/diag/linked-target-features.json" || true
+{
+  echo "cflags=$WASM_CFLAGS"
+  echo "tail_call=$tail_call forbid=${forbid[*]:-}"
+  echo "cabal_build_seconds=$cabal_seconds"
+  echo "linked_size=$(wc -c < "$out/shellcheck.linked.wasm" | tr -d ' ')"
+  cat "$out/diag/linked-target-features.json"
+  cat "$out/diag/linked-counts.txt"
+  echo "--- simd functions (count name)"
+  cat "$out/diag/simd-funcs.txt"
+} | tee "$out/diag/summary.txt"
 
-wasm-opt --enable-tail-call --flatten --rereloop --converge -O3 \
+# Gate on the linker output: wasm-opt --enable-tail-call rewrites target_features.
+opt_features=()
+if [ "$tail_call" = require ]; then
+  python3 "$tools/check-target-features.py" "$out/shellcheck.linked.wasm" --require tail-call
+  opt_features=(--enable-tail-call)
+fi
+# A feature missing from `validate --features all,-X` is one no instruction uses, whatever
+# target_features claims.
+for feature in "${forbid[@]}"; do
+  wasm-tools validate --features "all,-$feature" "$out/shellcheck.linked.wasm"
+done
+
+started=$SECONDS
+wasm-opt "${opt_features[@]}" --flatten --rereloop --converge -O3 \
   -o "$out/shellcheck.wasm" "$out/shellcheck.linked.wasm"
+echo "wasm_opt_seconds=$((SECONDS - started))" | tee -a "$out/diag/summary.txt"
 wasm-tools validate --features all "$out/shellcheck.wasm"
-python3 "$tools/check-target-features.py" "$out/shellcheck.wasm" --require tail-call \
-  > "$out/target-features.json"
-wasmtime run -W tail-call=y "$out/shellcheck.wasm" --version \
+for feature in "${forbid[@]}"; do
+  wasm-tools validate --features "all,-$feature" "$out/shellcheck.wasm"
+done
+if [ "$tail_call" = require ]; then
+  python3 "$tools/check-target-features.py" "$out/shellcheck.wasm" --require tail-call \
+    > "$out/target-features.json"
+  wasmtime_flags=(-W tail-call=y)
+else
+  python3 "$tools/check-target-features.py" "$out/shellcheck.wasm" > "$out/target-features.json"
+  wasmtime_flags=(-W tail-call=n)
+fi
+wasmtime run "${wasmtime_flags[@]}" "$out/shellcheck.wasm" --version \
   | grep -Fx "version: ${SHELLCHECK_VERSION#v}"
+{
+  echo "final_size=$(wc -c < "$out/shellcheck.wasm" | tr -d ' ')"
+  echo "final_gzip9=$(gzip -9 -c "$out/shellcheck.wasm" | wc -c | tr -d ' ')"
+  echo "final_target_features=$(cat "$out/target-features.json")"
+} | tee -a "$out/diag/summary.txt"
 
 cd "$out"
 sha256sum shellcheck.wasm > shellcheck.wasm.sha256

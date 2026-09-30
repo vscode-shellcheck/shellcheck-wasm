@@ -179,7 +179,12 @@ describe("package", () => {
         const wasm = readFileSync(wasmPath);
         expect(BUILD_INFO.sha256).toBe(createHash("sha256").update(wasm).digest("hex"));
         expect(BUILD_INFO.size).toBe(wasm.byteLength);
-        expect(BUILD_INFO.targetFeatures).toContain("+tail-call");
+        // Research branch: the non-tail-call variants must not claim tail calls either.
+        if (BUILD_INFO.cflags.includes("-mtail-call")) {
+          expect(BUILD_INFO.targetFeatures).toContain("+tail-call");
+        } else {
+          expect(BUILD_INFO.targetFeatures).not.toContain("+tail-call");
+        }
       },
     );
 

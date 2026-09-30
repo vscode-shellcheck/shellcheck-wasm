@@ -17,7 +17,9 @@ RUN test -n "$GHC_WASM_META_COMMIT" \
     && rm meta.tar.gz
 
 # ghc-wasm-meta dropped -mtail-call from its defaults; GHC only emits return_call when it is baked in.
-ENV WASM_CFLAGS="-Wno-error=int-conversion -O3 -mcpu=lime1 -mreference-types -msimd128 -mtail-call"
+# Research: overridable so CI can build a variant without -mtail-call (and without -msimd128).
+ARG WASM_CFLAGS="-Wno-error=int-conversion -O3 -mcpu=lime1 -mreference-types -msimd128 -mtail-call"
+ENV WASM_CFLAGS=$WASM_CFLAGS
 RUN CONF_CC_OPTS_STAGE1="$WASM_CFLAGS" CONF_CXX_OPTS_STAGE1="-fno-exceptions $WASM_CFLAGS" \
     CONF_CC_OPTS_STAGE2="$WASM_CFLAGS" CONF_CXX_OPTS_STAGE2="-fno-exceptions $WASM_CFLAGS" \
     ./setup.sh
@@ -27,6 +29,9 @@ FROM toolchain AS build
 ARG GHC_WASM_META_COMMIT
 ARG SHELLCHECK_VERSION
 ARG SHELLCHECK_SRC_SHA256
+# Research: require | forbid tail calls; FORBID_FEATURES lists further wasm-tools feature names.
+ARG TAIL_CALL=require
+ARG FORBID_FEATURES=""
 
 WORKDIR /shellcheck
 RUN test -n "$SHELLCHECK_VERSION" && test -n "$SHELLCHECK_SRC_SHA256" \
@@ -43,3 +48,4 @@ RUN ./build.sh
 
 FROM scratch AS artifact
 COPY --from=build /out/shellcheck.wasm /out/shellcheck.wasm.sha256 /out/build-info.json /
+COPY --from=build /out/diag /diag
