@@ -1,16 +1,16 @@
 name: CI
 
+# Pushes to main and next run this through release.yml, which releases after it passes.
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-wasm:
