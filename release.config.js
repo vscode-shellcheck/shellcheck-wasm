@@ -1,18 +1,19 @@
 /** @type {import("semantic-release").GlobalConfig} */
 export default {
   branches: ["main", { name: "next", prerelease: true }],
+  // Top-level options reach every plugin. The angular default preset ignores `feat!:`; only
+  // conventionalcommits reads the `!`.
+  preset: "conventionalcommits",
   plugins: [
     [
       "@semantic-release/commit-analyzer",
       {
-        // The angular default preset ignores `feat!:`; only conventionalcommits reads the `!`.
-        preset: "conventionalcommits",
         // semantic-release has no 0.x mode and would turn a breaking change into 1.0.0.
         // Drop this rule when the package goes 1.0.
         releaseRules: [{ breaking: true, release: "minor" }],
       },
     ],
-    ["@semantic-release/release-notes-generator", { preset: "conventionalcommits" }],
+    "@semantic-release/release-notes-generator",
     // The tarball is packed from dist/ built earlier in the job; the version is only written
     // into package.json at publish time, never committed back.
     "@semantic-release/npm",
