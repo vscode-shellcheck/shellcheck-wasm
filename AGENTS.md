@@ -59,6 +59,9 @@ ShellCheck (`scripts/bench.mjs`, several minutes); it exits 1 when the new runne
   `//` comment would not. Everything `./client` reaches is MIT; every other source is
   GPL-3.0-or-later (ADR 0007; guarded by `test/web-package.test.ts`). `./client` has
   no `import.meta`, and `dist/browser/worker.js` is a classic script.
+- `isArtifactSupported()` (`src/support.ts`) probes every wasm feature the artifact needs that
+  some supported-looking engine lacks: today tail calls and SIMD. A new feature in the build
+  needs a new probe.
 - The package provides the Worker protocol, bridge, FIFO queue and `AbortSignal` cancellation;
   creating Workers, what to mount, scheduling policy and watchdog durations stay in the Host
   (ADR 0005).
