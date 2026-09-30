@@ -127,7 +127,7 @@ Bundlers that relocate modules can copy the artifact from
 
 The package follows its own semver, independent of the bundled ShellCheck release exposed as
 `SHELLCHECK_VERSION`; `BUILD_INFO` describes the build that produced the artifact. Prereleases
-are published under the `next` dist-tag.
+from the `next` branch are published under the `next` dist-tag.
 
 ## Licensing
 

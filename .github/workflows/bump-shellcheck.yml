@@ -53,8 +53,9 @@ jobs:
           token: ${{ secrets.BUMP_PR_TOKEN || github.token }}
           branch: bump/shellcheck-${{ steps.upstream.outputs.tag }}
           delete-branch: true
-          commit-message: "chore(wasm): bump ShellCheck to ${{ steps.upstream.outputs.tag }}"
-          title: "chore(wasm): bump ShellCheck to ${{ steps.upstream.outputs.tag }}"
+          # feat, not chore: a new ShellCheck release changes lint output, so it must cut a release.
+          commit-message: "feat(wasm): bump ShellCheck to ${{ steps.upstream.outputs.tag }}"
+          title: "feat(wasm): bump ShellCheck to ${{ steps.upstream.outputs.tag }}"
           body: |
             Updates the pinned ShellCheck release to [${{ steps.upstream.outputs.tag }}](https://github.com/koalaman/shellcheck/releases/tag/${{ steps.upstream.outputs.tag }}).
 

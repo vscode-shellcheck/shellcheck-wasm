@@ -1,6 +1,6 @@
 {
   "name": "@vscode-shellcheck/shellcheck-wasm",
-  "version": "0.2.0-next.1",
+  "version": "0.0.0-semantic-release",
   "description": "ShellCheck compiled to WebAssembly (WASI command module) with a Worker-based runner",
   "license": "GPL-3.0-or-later AND MIT",
   "repository": {
@@ -35,7 +35,8 @@
     "./package.json": "./package.json"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "node scripts/build.ts && tsc -p tsconfig.build.json",
@@ -54,9 +55,11 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.1",
+    "conventional-changelog-conventionalcommits": "^9.3.1",
     "esbuild": "^0.27.7",
     "oxfmt": "^0.68.0",
     "oxlint": "^1.83.0",
+    "semantic-release": "^25.0.9",
     "typescript": "^7.0.2",
     "vitest": "^5.0.1"
   },

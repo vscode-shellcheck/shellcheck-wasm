@@ -2,153 +2,53 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main, next]
 
 permissions:
   contents: read
 
+# Queue rather than cancel: a cancelled run could stop between the npm publish and the tag push.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  guard:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
     steps:
       - uses: actions/checkout@v7
-
-      - name: Check package.json version matches the tag
-        run: |
-          pkg_version="$(node -p "require('./package.json').version")"
-          tag_version="${GITHUB_REF_NAME#v}"
-          if [ "$pkg_version" != "$tag_version" ]; then
-            echo "::error::package.json version $pkg_version does not match tag $GITHUB_REF_NAME"
-            exit 1
-          fi
-
-  build-wasm:
-    needs: guard
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Read pins
-        id: pins
-        run: |
-          {
-            echo "shellcheck_version=$(cat buildtools/wasm/version.txt)"
-            echo "shellcheck_src_sha256=$(cat buildtools/wasm/shellcheck-src.sha256)"
-            echo "ghc_wasm_meta_commit=$(cat buildtools/wasm/ghc-wasm-meta.txt)"
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: docker/setup-buildx-action@v4
-
-      - uses: docker/build-push-action@v7
         with:
-          context: buildtools/wasm
-          file: buildtools/wasm/Dockerfile
-          target: artifact
-          outputs: type=local,dest=dist
-          # buildx would otherwise drop a SLSA provenance.json into dist/, which ships in the npm package
-          provenance: false
-          build-args: |
-            SHELLCHECK_VERSION=${{ steps.pins.outputs.shellcheck_version }}
-            SHELLCHECK_SRC_SHA256=${{ steps.pins.outputs.shellcheck_src_sha256 }}
-            GHC_WASM_META_COMMIT=${{ steps.pins.outputs.ghc_wasm_meta_commit }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - run: cat dist/build-info.json
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: shellcheck-wasm
-          path: dist/
-          if-no-files-found: error
-
-  test:
-    needs: build-wasm
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
+          # semantic-release reads every tag and its git notes to find the last release per channel.
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v8
         with:
           name: shellcheck-wasm
           path: dist
 
+      # No registry-url: setup-node would write an .npmrc expecting NODE_AUTH_TOKEN, and
+      # @semantic-release/npm has to fall through to Trusted Publishing (OIDC) instead.
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
 
       - run: npm ci
-      - run: bash scripts/fetch-native-shellcheck.sh
-      - run: npm run build
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run fmt:check
-      - run: npm test
-
-      - name: Check the packed tarball contains the artifact
-        run: |
-          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
-          node -e '
-            const [pkg] = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
-            const paths = pkg.files.map((f) => f.path);
-            if (!paths.includes("dist/shellcheck.wasm")) {
-              console.error("dist/shellcheck.wasm is not in the tarball:", paths);
-              process.exit(1);
-            }
-          ' "$RUNNER_TEMP/pack.json"
-
-  publish:
-    needs: test
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: shellcheck-wasm
-          path: dist
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
-
-      - run: npm ci
       - run: npm run build
 
-      # A prerelease version (x.y.z-tag.n) goes to the `next` dist-tag so `latest` keeps
-      # pointing at the last stable release.
-      - name: Classify the version
-        id: channel
-        run: |
-          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Trusted Publishing: npm exchanges the job's OIDC token for publish rights, so no
-      # NODE_AUTH_TOKEN is set anywhere in this workflow.
-      - if: steps.channel.outputs.prerelease == 'false'
-        run: npm publish --provenance --access public
-
-      - if: steps.channel.outputs.prerelease == 'true'
-        run: npm publish --provenance --access public --tag next
-
-      # build-info.json is not in the npm tarball (its contents are compiled into BUILD_INFO)
-      # but stays a release asset next to the artifact it describes.
-      - name: Create GitHub Release
+      # main publishes to the `latest` dist-tag; next publishes x.y.z-next.n to `next` and marks
+      # its GitHub Release as a prerelease. npm-side Trusted Publisher: package
+      # @vscode-shellcheck/shellcheck-wasm, repo vscode-shellcheck/shellcheck-wasm, workflow
+      # release.yml.
+      - run: npx semantic-release
         env:
-          GH_TOKEN: ${{ github.token }}
-          PRERELEASE: ${{ steps.channel.outputs.prerelease }}
-        run: |
-          flags=(--verify-tag --generate-notes)
-          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" \
-            dist/shellcheck.wasm dist/shellcheck.wasm.sha256 dist/build-info.json \
-            "${flags[@]}"
+          GITHUB_TOKEN: ${{ github.token }}

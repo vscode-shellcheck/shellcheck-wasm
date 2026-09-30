@@ -79,16 +79,25 @@ The Dockerfile is validated by review and by `ci.yml`, which builds the artifact
 
 ## Releasing
 
-1. `npm version x.y.z --no-git-tag-version`, commit, push, then push tag `vX.Y.Z`.
-2. `release.yml` fails unless the tag equals `package.json` version; it builds, tests, runs
-   `npm publish --provenance` through npm Trusted Publishing (no token secret; npm-side setup is
-   package `@vscode-shellcheck/shellcheck-wasm`, repo `vscode-shellcheck/shellcheck-wasm`,
-   workflow `release.yml`), then creates the GitHub Release with `shellcheck.wasm`, `.sha256`
-   and `build-info.json`. A prerelease version (`x.y.z-next.n`) is published with
-   `--tag next` and its GitHub Release is marked as a prerelease; `latest` is untouched.
+semantic-release (`release.config.js`) cuts every release from the Conventional Commit subjects
+that land on a release branch, so PR titles decide the version (PRs are squash-merged).
 
-`bump-shellcheck.yml` runs daily and opens `chore(wasm): bump ShellCheck to <tag>` PRs. PRs opened
-with `github.token` get no CI run; set the `BUMP_PR_TOKEN` secret (PAT or App token) so they do.
+- `release.yml` runs on every push to `main` or `next`: it calls `ci.yml`, then runs
+  `semantic-release`, which publishes to npm through Trusted Publishing (no token secret;
+  npm-side setup is package `@vscode-shellcheck/shellcheck-wasm`, repo
+  `vscode-shellcheck/shellcheck-wasm`, workflow `release.yml`), pushes tag `vX.Y.Z` and creates
+  the GitHub Release with `shellcheck.wasm`, `.sha256` and `build-info.json`.
+- `main` publishes to the `latest` dist-tag. `next` publishes `x.y.z-next.n` to the `next`
+  dist-tag and marks its GitHub Release as a prerelease; merge `next` into `main` to promote.
+- `feat` → minor, `fix`/`perf` → patch, other types → no release. While the package is 0.x a
+  breaking change (`!` or `BREAKING CHANGE:`) is a minor bump, not 1.0.0.
+- The version is never committed: `package.json` stays `0.0.0-semantic-release`; the published
+  version lives in tags, and semantic-release records each tag's channel in git notes
+  (`refs/notes/semantic-release-<tag>`). Do not delete those notes or hand-push `v*` tags.
+
+`bump-shellcheck.yml` runs daily and opens `feat(wasm): bump ShellCheck to <tag>` PRs (`feat` so
+that merging one releases). PRs opened with `github.token` get no CI run; set the `BUMP_PR_TOKEN`
+secret (PAT or App token) so they do.
 
 ## Conventions
 
