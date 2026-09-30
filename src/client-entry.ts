@@ -15,4 +15,5 @@ export type {
   FileType,
   ShellCheckFileSystem,
 } from "./file-system.js";
-export { BUILD_INFO, SHELLCHECK_VERSION, type BuildInfo } from "./build-info.js";
+export { BUILD_INFO, SHELLCHECK_VERSION, type ArtifactInfo, type BuildInfo } from "./build-info.js";
+export { isArtifactSupported } from "./support.js";
