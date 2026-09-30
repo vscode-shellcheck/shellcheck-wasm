@@ -110,12 +110,14 @@ following links out of it.
 
 ## Entry points
 
-| Subpath             | Provides                                                                                     |
-| ------------------- | -------------------------------------------------------------------------------------------- |
-| `.`                 | `createShellCheck`, `wasmUrl`, `SHELLCHECK_VERSION`, `BUILD_INFO` and types; no WASI shim    |
-| `./worker`          | `startWorker`, `ParentPort`: the Worker side                                                 |
-| `./shellcheck.wasm` | The compiled ShellCheck module                                                               |
-| `./package.json`    | The package manifest                                                                         |
+| Subpath               | Provides                                                                                  |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `.`                   | `createShellCheck`, `wasmUrl`, `SHELLCHECK_VERSION`, `BUILD_INFO` and types; no WASI shim |
+| `./client`            | The same without `wasmUrl`, for Hosts that bundle it; MIT and free of `import.meta`       |
+| `./worker`            | `startWorker`, `ParentPort`: the Worker side                                              |
+| `./browser/worker.js` | The Worker side as one classic script, for `new Worker(url)` in a browser                 |
+| `./shellcheck.wasm`   | The compiled ShellCheck module                                                            |
+| `./package.json`      | The package manifest                                                                      |
 
 Bundlers that relocate modules can copy the artifact from
 `require.resolve("@vscode-shellcheck/shellcheck-wasm/shellcheck.wasm")` and pass their own
@@ -127,7 +129,8 @@ The package follows its own semver, independent of the bundled ShellCheck releas
 `SHELLCHECK_VERSION`; `BUILD_INFO` describes the build that produced the artifact. Prereleases
 are published under the `next` dist-tag.
 
-## License
+## Licensing
 
-GPL-3.0-or-later, same as ShellCheck. ShellCheck is copyright Vidar Holen and contributors; this
-wrapper is a derivative work.
+GPL-3.0-or-later, same as ShellCheck (copyright Vidar Holen and contributors), except the
+`./client` entry and the modules behind it, which are MIT ([`LICENSE-MIT`](./LICENSE-MIT)) so that
+a Host can bundle them (ADR 0007).

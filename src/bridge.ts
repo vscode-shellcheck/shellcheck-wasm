@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 import type { FileStat, FileType } from "./file-system.js";
 import {
   CHUNK_BYTES,

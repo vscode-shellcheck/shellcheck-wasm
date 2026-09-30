@@ -2,7 +2,7 @@
   "name": "@vscode-shellcheck/shellcheck-wasm",
   "version": "0.2.0-next.0",
   "description": "ShellCheck compiled to WebAssembly (WASI command module) with a Worker-based runner",
-  "license": "GPL-3.0-or-later",
+  "license": "GPL-3.0-or-later AND MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vscode-shellcheck/shellcheck-wasm.git"
@@ -10,8 +10,10 @@
   "files": [
     "dist",
     "!dist/build-info.json",
+    "!dist/browser-worker.*",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "LICENSE-MIT"
   ],
   "type": "module",
   "sideEffects": false,
@@ -24,6 +26,11 @@
       "types": "./dist/worker.d.ts",
       "default": "./dist/worker.js"
     },
+    "./client": {
+      "types": "./dist/client-entry.d.ts",
+      "default": "./dist/client-entry.js"
+    },
+    "./browser/worker.js": "./dist/browser/worker.js",
     "./shellcheck.wasm": "./dist/shellcheck.wasm",
     "./package.json": "./package.json"
   },
@@ -33,7 +40,7 @@
   "scripts": {
     "gen:version": "node scripts/gen-version.mjs",
     "gen:build-info": "node scripts/gen-build-info.mjs",
-    "build": "npm run gen:version && npm run gen:build-info && tsc -p tsconfig.build.json",
+    "build": "npm run gen:version && npm run gen:build-info && tsc -p tsconfig.build.json && node scripts/build-browser-worker.mjs",
     "build:wasm": "scripts/build-wasm.sh",
     "fetch:native": "scripts/fetch-native-shellcheck.sh",
     "bench": "node scripts/bench.mjs",
@@ -48,6 +55,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.1",
+    "esbuild": "^0.27.7",
     "oxfmt": "^0.68.0",
     "oxlint": "^1.83.0",
     "typescript": "^7.0.2",

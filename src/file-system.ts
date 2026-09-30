@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 export type FileType = "file" | "directory" | "other";
 
 export interface FileStat {

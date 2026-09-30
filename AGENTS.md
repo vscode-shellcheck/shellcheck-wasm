@@ -54,6 +54,9 @@ ShellCheck (`scripts/bench.mjs`, several minutes); it exits 1 when the new runne
 - No shipped module imports `node:*` or a bare Node built-in, and files reach the guest only
   through the Host's `ShellCheckFileSystem` (ADR 0006; guarded by `test/package.test.ts`). The
   caller-side entry `.` does not load the WASI shim; only `./worker` does.
+- Everything `./client` reaches starts with `// SPDX-License-Identifier: MIT`; every other
+  source is GPL-3.0-or-later (ADR 0007; guarded by `test/web-package.test.ts`). `./client` has
+  no `import.meta`, and `dist/browser/worker.js` is a classic script.
 - The package provides the Worker protocol, bridge, FIFO queue and `AbortSignal` cancellation;
   creating Workers, what to mount, scheduling policy and watchdog durations stay in the Host
   (ADR 0005).
