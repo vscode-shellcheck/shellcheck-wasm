@@ -43,6 +43,7 @@ describe.skipIf(skipHint(!hasDist, distHint))("web entries", () => {
       "BUILD_INFO",
       "SHELLCHECK_VERSION",
       "createShellCheck",
+      "isArtifactSupported",
     ]);
   });
 

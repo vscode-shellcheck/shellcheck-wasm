@@ -2,15 +2,15 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { BuildInfo } from "../src/build-info.ts";
+import type { ArtifactInfo, BuildInfo } from "../src/build-info.ts";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const versionFile = resolve(repoRoot, "buildtools/wasm/version.txt");
 const infoFile = resolve(repoRoot, "dist/build-info.json");
 const wasmFile = resolve(repoRoot, "dist/shellcheck.wasm");
 
-/** Field name → expected `typeof`, in the order `src/build-info.ts` declares them. */
-const FIELDS: Record<keyof BuildInfo, string> = {
+/** Field of `dist/build-info.json`, as the wasm build writes it, → expected `typeof`. */
+const FIELDS = {
   shellcheckVersion: "string",
   ghcWasmMetaCommit: "string",
   ghcVersion: "string",
@@ -20,7 +20,7 @@ const FIELDS: Record<keyof BuildInfo, string> = {
   targetFeatures: "object",
   sha256: "string",
   size: "number",
-};
+} as const;
 
 /**
  * The `define` map `src/build-info.ts` reads, for esbuild and for vitest, which runs `src/`
@@ -50,7 +50,7 @@ export function buildConstants(): Record<string, string> {
   const keys = Object.keys(info).toSorted();
   if (JSON.stringify(keys) !== JSON.stringify(Object.keys(FIELDS).toSorted())) {
     throw new Error(
-      `${infoFile} has fields ${keys.join(", ")}; update src/build-info.ts and this script`,
+      `${infoFile} has fields ${keys.join(", ")}; update this script and src/build-info.ts`,
     );
   }
   for (const [field, type] of Object.entries(FIELDS)) {
@@ -76,10 +76,26 @@ export function buildConstants(): Record<string, string> {
     );
   }
 
-  const ordered = Object.fromEntries(Object.keys(FIELDS).map((field) => [field, info[field]]));
+  // Checked field by field above. The file keeps the flat shape Releases have always had.
+  const flat = info as unknown as Omit<BuildInfo, "artifacts"> & ArtifactInfo;
+  const buildInfo: BuildInfo = {
+    shellcheckVersion: flat.shellcheckVersion,
+    ghcWasmMetaCommit: flat.ghcWasmMetaCommit,
+    ghcVersion: flat.ghcVersion,
+    cabalVersion: flat.cabalVersion,
+    wasmOptVersion: flat.wasmOptVersion,
+    artifacts: {
+      "shellcheck.wasm": {
+        cflags: flat.cflags,
+        targetFeatures: flat.targetFeatures,
+        sha256: flat.sha256,
+        size: flat.size,
+      },
+    },
+  };
   return {
     INJECTED_SHELLCHECK_VERSION: JSON.stringify(version),
     // A string, not an object: esbuild hoists an object define above the SPDX header.
-    INJECTED_BUILD_INFO: JSON.stringify(JSON.stringify(ordered)),
+    INJECTED_BUILD_INFO: JSON.stringify(JSON.stringify(buildInfo)),
   };
 }

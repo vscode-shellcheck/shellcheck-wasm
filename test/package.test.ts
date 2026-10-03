@@ -162,6 +162,7 @@ describe("package", () => {
     it("exposes the documented API from dist/index.js and dist/worker.js", async () => {
       const index = (await import(distIndex)) as typeof import("../src/index.js");
       expect(typeof index.createShellCheck).toBe("function");
+      expect(index.isArtifactSupported()).toBe(true);
       expect(index.SHELLCHECK_VERSION).toBe(SHELLCHECK_VERSION);
       expect(index.BUILD_INFO.shellcheckVersion).toBe(SHELLCHECK_VERSION);
       expect(index.wasmUrl).toBeInstanceOf(URL);
@@ -177,9 +178,11 @@ describe("package", () => {
       async () => {
         const { BUILD_INFO } = (await import(distIndex)) as typeof import("../src/index.js");
         const wasm = readFileSync(wasmPath);
-        expect(BUILD_INFO.sha256).toBe(createHash("sha256").update(wasm).digest("hex"));
-        expect(BUILD_INFO.size).toBe(wasm.byteLength);
-        expect(BUILD_INFO.targetFeatures).toContain("+tail-call");
+        const artifact = BUILD_INFO.artifacts["shellcheck.wasm"];
+        expect(Object.keys(BUILD_INFO.artifacts)).toEqual(["shellcheck.wasm"]);
+        expect(artifact.sha256).toBe(createHash("sha256").update(wasm).digest("hex"));
+        expect(artifact.size).toBe(wasm.byteLength);
+        expect(artifact.targetFeatures).toContain("+tail-call");
       },
     );
 
