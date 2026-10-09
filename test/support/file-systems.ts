@@ -31,6 +31,19 @@ function typeOf(stats: Stats): FileType {
   return "other";
 }
 
+async function translate<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    const code = CODES[(error as NodeJS.ErrnoException).code ?? ""];
+    throw code === undefined ? error : fileSystemError(code, (error as Error).message);
+  }
+}
+
+function missing(guestPath: string): Error {
+  return fileSystemError("FileNotFound", `${guestPath} not found`);
+}
+
 /**
  * What a Node Host would pass as `fs`: `root` seen as guest `/`, with Node errors
  * translated to the codes the package understands. No symlink containment; tests only.
@@ -38,14 +51,6 @@ function typeOf(stats: Stats): FileType {
 export function nodeFileSystem(root: string): RecordingFileSystem {
   const calls: string[] = [];
   const host = (guestPath: string): string => path.join(root, guestPath);
-  const translate = async <T>(work: () => Promise<T>): Promise<T> => {
-    try {
-      return await work();
-    } catch (error) {
-      const code = CODES[(error as NodeJS.ErrnoException).code ?? ""];
-      throw code === undefined ? error : fileSystemError(code, (error as Error).message);
-    }
-  };
   return {
     calls,
     stat: (guestPath) => {
@@ -95,8 +100,6 @@ export function memoryFileSystem(
       type = "directory";
     }
   }
-  const missing = (guestPath: string): Error =>
-    fileSystemError("FileNotFound", `${guestPath} not found`);
   const base: ShellCheckFileSystem = {
     stat: async (guestPath) => {
       const data = contents.get(guestPath);
